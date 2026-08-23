@@ -196,8 +196,18 @@ batch_size x context_length x max_steps = 64 x 128 x 6104 = 50,003,968 tokens
 ```
 
 Validation loss is computed every 500 steps, and qualitative samples are printed
-every 1000 steps. When `max_steps` is set, training cycles through the dataset
-as many times as needed to reach the token budget.
+every 1000 steps. Each sample prints the fed prompt separately from the
+predicted continuation, so it is clear what the model received and what it
+generated. When `max_steps` is set, training cycles through the dataset as many
+times as needed to reach the token budget.
+
+Real-data runs also save checkpoints every 1000 steps and at the end:
+
+```text
+checkpoints/real_baseline/
+checkpoints/real_per_token/
+checkpoints/real_recurrent/
+```
 
 ## 30M-50M Starting Scale
 
@@ -215,7 +225,7 @@ See `configs/research_30m_example.yaml`. With SwiGLU MLP ratio 4, this is roughl
 ## Assumptions To Revisit Before Paper-Scale Runs
 
 - The recurrent model currently stores one shared memory state between chunks, not separate layerwise memories.
-- The recurrent update uses mean pooling plus a GRUCell. This is intentionally simple and may be too weak for final experiments.
+- The recurrent update uses mean pooling plus a low-rank gated update. This is intentionally simple and may be too weak for final experiments.
 - Per-token compressed attention applies RoPE in compressed head space. Very small `memory_dim` values may lose positional capacity.
 - Training FLOPs are not yet exactly matched; persistent memory accounting is implemented first.
 - The real-text path now supports `tiktoken`; tokenizer choice must remain fixed across compared runs.

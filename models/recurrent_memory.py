@@ -117,9 +117,9 @@ class RecurrentMemoryTransformer(nn.Module):
             all_caches.append(caches)
 
         x = torch.cat(outputs, dim=1)
-        if self.param_padding is not None:
-            x = x * (1.0 + self.param_padding.mean())
         logits = self.lm_head(self.norm(x))
+        if self.param_padding is not None:
+            logits = logits * (1.0 + self.param_padding.mean())
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=-100)

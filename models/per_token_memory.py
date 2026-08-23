@@ -139,12 +139,13 @@ class PerTokenMemoryTransformer(nn.Module):
         for layer in self.layers:
             x, cache = layer(x, self.rope_cos, self.rope_sin)
             caches.append(cache)
+        logits = self.lm_head(self.norm(x))
         if self.param_padding is not None:
             # Parameter-count matching knob. It participates as a tiny global
-            # residual scale so the matched parameters are trainable, while the
-            # memory mechanism itself remains unchanged.
-            x = x * (1.0 + self.param_padding.mean())
-        logits = self.lm_head(self.norm(x))
+            # logit scale so the matched parameters are trainable, while the
+            # memory mechanism itself remains unchanged. This is intentionally
+            # after RMSNorm; before RMSNorm the scalar would mostly cancel out.
+            logits = logits * (1.0 + self.param_padding.mean())
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=-100)

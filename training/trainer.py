@@ -74,6 +74,39 @@ def write_csv(path: Path, rows) -> None:
         writer.writerows(rows)
 
 
+def save_training_checkpoint(
+    path: Path,
+    model,
+    optimizer,
+    config: Dict,
+    step: int,
+    epoch: int,
+    tokens_processed: int,
+    latest_metrics: Dict,
+) -> None:
+    """Save enough state to inspect or continue a run later.
+
+    The current trainer does not yet implement automatic resume semantics, but
+    long real-data runs should still leave recoverable model and optimizer
+    snapshots instead of only CSV metrics.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "step": step,
+            "epoch": epoch,
+            "tokens_processed": tokens_processed,
+            "config": config,
+            "git_hash": get_git_hash(),
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "latest_metrics": latest_metrics,
+        },
+        path,
+    )
+
+
 @torch.no_grad()
 def generate_token_sample(model, tokenizer, prompt: str, config: Dict, device: torch.device):
     """Generate token ids from the current checkpoint.
@@ -297,6 +330,9 @@ def train_language_model(config: Dict) -> Dict:
     max_steps = int(max_steps_cfg) if max_steps_cfg is not None else None
     num_epochs = int(config.get("num_epochs", 1))
     eval_every = int(config.get("eval_every", 50))
+    checkpoint_dir_cfg = config.get("checkpoint_dir")
+    checkpoint_dir = Path(checkpoint_dir_cfg) if checkpoint_dir_cfg else None
+    save_every = int(config.get("save_every", 0))
     step = 0
 
     epoch = 0
@@ -336,6 +372,17 @@ def train_language_model(config: Dict) -> Dict:
                 log_rows.append(row)
                 append_jsonl(log_path, {"event": "metrics", **row})
                 print(f"step {step:04d} | train {row['train_loss']:.4f} | val {val_loss:.4f}")
+                if checkpoint_dir is not None and save_every > 0 and step % save_every == 0:
+                    save_training_checkpoint(
+                        checkpoint_dir / f"step_{step:06d}.pt",
+                        model,
+                        optimizer,
+                        config,
+                        step,
+                        epoch,
+                        tokens_processed,
+                        row,
+                    )
             maybe_print_generation_sample(model, tokenizer, config, step, device)
 
             if max_steps is not None and step >= max_steps:
@@ -344,6 +391,19 @@ def train_language_model(config: Dict) -> Dict:
             break
         if max_steps is None and epoch >= num_epochs:
             break
+
+    if checkpoint_dir is not None:
+        latest_metrics = log_rows[-1] if log_rows else {}
+        save_training_checkpoint(
+            checkpoint_dir / "final.pt",
+            model,
+            optimizer,
+            config,
+            step,
+            epoch,
+            tokens_processed,
+            latest_metrics,
+        )
 
     summary = {
         "config": config,

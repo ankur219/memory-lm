@@ -42,9 +42,12 @@ class DecoderOnlyTransformer(nn.Module):
         for layer in self.layers:
             x, cache = layer(x, self.rope_cos, self.rope_sin)
             caches.append(cache)
-        if self.param_padding is not None:
-            x = x * (1.0 + self.param_padding.mean())
         logits = self.lm_head(self.norm(x))
+        if self.param_padding is not None:
+            # Parameter-count matching knob. Applying the scalar after RMSNorm
+            # ensures the extra trainable parameters have a real gradient path;
+            # a pre-normalization scalar is mostly cancelled by RMSNorm.
+            logits = logits * (1.0 + self.param_padding.mean())
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=-100)

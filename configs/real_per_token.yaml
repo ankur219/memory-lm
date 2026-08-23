@@ -21,7 +21,7 @@ data:
   source: tinystories
   split: train
   cache_dir: data/hf_cache
-  offline: true
+  offline: false
   max_examples: 1000
   max_chars: 1000000
 model:

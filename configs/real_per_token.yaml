@@ -2,11 +2,11 @@ task: real_lm
 seed: 0
 model_name: per_token
 device: auto
-batch_size: 8
+batch_size: 64
 learning_rate: 0.0005
 weight_decay: 0.01
 grad_clip: 1.0
-max_steps: 9766
+max_steps: 6104
 num_epochs: 1
 eval_every: 500
 val_fraction: 0.05
@@ -30,8 +30,8 @@ data:
   split: train
   cache_dir: data/hf_cache
   offline: false
-  max_examples: 50000
-  max_chars: 50000000
+  max_examples: 250000
+  max_chars: 250000000
 model:
   vocab_size: 257
   hidden_size: 128

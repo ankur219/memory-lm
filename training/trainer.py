@@ -286,7 +286,9 @@ def train_language_model(config: Dict) -> Dict:
     eval_every = int(config.get("eval_every", 50))
     step = 0
 
-    for epoch in range(1, num_epochs + 1):
+    epoch = 0
+    while True:
+        epoch += 1
         for input_ids, targets in train_loader:
             step += 1
             input_ids = input_ids.to(device)
@@ -326,6 +328,8 @@ def train_language_model(config: Dict) -> Dict:
             if max_steps is not None and step >= max_steps:
                 break
         if max_steps is not None and step >= max_steps:
+            break
+        if max_steps is None and epoch >= num_epochs:
             break
 
     summary = {

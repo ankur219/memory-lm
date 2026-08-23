@@ -44,6 +44,7 @@ def load_description(config_path: Path) -> dict:
     max_steps = cfg.get("max_steps")
     planned_steps = int(max_steps) if max_steps is not None else steps_per_epoch * num_epochs
     planned_tokens = planned_steps * batch_size * context_length
+    planned_data_passes = planned_steps / max(1, steps_per_epoch)
 
     return {
         "config_name": config_path.name,
@@ -58,6 +59,7 @@ def load_description(config_path: Path) -> dict:
         "steps_per_epoch": steps_per_epoch,
         "planned_steps": planned_steps,
         "planned_train_tokens": planned_tokens,
+        "planned_data_passes": planned_data_passes,
         "params": parameter_breakdown(model)["total"],
         "param_breakdown": parameter_breakdown(model),
         "persistent_memory": memory_budget_for_model(cfg["model_name"], model_cfg, context_length),
@@ -77,6 +79,7 @@ def print_description(desc: dict) -> None:
     print(f"  steps_per_epoch: {desc['steps_per_epoch']:,}")
     print(f"  planned_steps: {desc['planned_steps']:,}")
     print(f"  planned_train_tokens: {desc['planned_train_tokens']:,}")
+    print(f"  planned_data_passes: {desc['planned_data_passes']:.2f}")
     print(f"  params: {desc['params']:,}")
     print(f"  param_breakdown: {desc['param_breakdown']}")
     print(f"  persistent_memory: {desc['persistent_memory']}")

@@ -125,3 +125,51 @@ def test_generation_sample_respects_every_steps(capsys):
     assert capsys.readouterr().out == ""
     maybe_print_generation_sample(model, ByteTokenizer(), cfg, step=100, device=next(model.parameters()).device)
     assert "sample step 0100" in capsys.readouterr().out
+
+
+def test_real_trainer_cycles_until_max_steps(tmp_path):
+    from training.trainer import train_language_model
+
+    cfg = {
+        "seed": 0,
+        "model_name": "per_token",
+        "device": "cpu",
+        "batch_size": 4,
+        "learning_rate": 0.001,
+        "weight_decay": 0.0,
+        "grad_clip": 1.0,
+        "max_steps": 5,
+        "num_epochs": 1,
+        "eval_every": 100,
+        "val_fraction": 0.2,
+        "block_stride": None,
+        "log_path": str(tmp_path / "run.jsonl"),
+        "csv_path": str(tmp_path / "run.csv"),
+        "tokenizer": {"kind": "byte"},
+        "data": {
+            "source": "text_file",
+            "path": "data/sample_real_text.txt",
+            "max_chars": 1200,
+        },
+        "model": {
+            "vocab_size": BYTE_VOCAB_SIZE,
+            "hidden_size": 32,
+            "num_layers": 1,
+            "num_heads": 4,
+            "context_length": 32,
+            "mlp_ratio": 2.0,
+            "dropout": 0.0,
+            "tie_embeddings": True,
+            "memory_dim": 16,
+            "num_memory_tokens": 4,
+            "recurrent_memory_dim": None,
+            "recurrent_update_rank": 4,
+            "recurrent_compressed_attention": True,
+            "recurrent_learned_initial": False,
+            "param_padding": 0,
+            "chunk_size": 16,
+        },
+    }
+    summary = train_language_model(cfg)
+    assert summary["final_metrics"]["step"] == 5
+    assert summary["final_metrics"]["tokens_processed"] == 5 * 4 * 32

@@ -1,0 +1,38 @@
+task: real_lm
+seed: 0
+model_name: per_token
+device: auto
+batch_size: 4
+learning_rate: 0.001
+weight_decay: 0.01
+grad_clip: 1.0
+max_steps: 20
+eval_every: 5
+val_fraction: 0.1
+log_path: logs/real_local_debug.jsonl
+csv_path: logs/real_local_debug.csv
+tokenizer:
+  kind: tiktoken
+  encoding: gpt2
+  cache_dir: data/tiktoken_cache
+data:
+  source: text_file
+  path: data/sample_real_text.txt
+  max_chars: 20000
+model:
+  vocab_size: 257
+  hidden_size: 64
+  num_layers: 2
+  num_heads: 4
+  context_length: 64
+  mlp_ratio: 4.0
+  dropout: 0.0
+  tie_embeddings: true
+  memory_dim: 32
+  num_memory_tokens: 8
+  recurrent_memory_dim:
+  recurrent_update_rank: 4
+  recurrent_compressed_attention: true
+  recurrent_learned_initial: false
+  param_padding: 0
+  chunk_size: 32

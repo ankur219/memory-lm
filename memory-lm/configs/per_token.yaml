@@ -1,0 +1,34 @@
+seed: 0
+model_name: per_token
+device: auto
+batch_size: 32
+learning_rate: 0.001
+weight_decay: 0.01
+grad_clip: 1.0
+max_steps: 200
+eval_every: 25
+log_path: logs/per_token_synthetic.jsonl
+csv_path: logs/per_token_synthetic.csv
+dataset:
+  num_examples: 1000
+  num_pairs: 8
+  num_keys: 64
+  num_values: 100
+  seed: 0
+model:
+  vocab_size: 174
+  hidden_size: 128
+  num_layers: 2
+  num_heads: 4
+  context_length: 64
+  mlp_ratio: 4.0
+  dropout: 0.0
+  tie_embeddings: true
+  memory_dim: 64
+  num_memory_tokens: 8
+  recurrent_memory_dim:
+  recurrent_update_rank: 4
+  recurrent_compressed_attention: true
+  recurrent_learned_initial: false
+  param_padding: 0
+  chunk_size: 32

@@ -1,0 +1,8 @@
+__pycache__/
+.pytest_cache/
+logs/*.jsonl
+logs/*.csv
+data/hf_cache/
+data/tiktoken_cache/
+*.pt
+*.pth

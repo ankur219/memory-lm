@@ -201,7 +201,7 @@ predicted continuation, so it is clear what the model received and what it
 generated. When `max_steps` is set, training cycles through the dataset as many
 times as needed to reach the token budget.
 
-Real-data runs also save checkpoints every 1000 steps and at the end:
+Real-data runs also save checkpoints every 5000 steps and at the end:
 
 ```text
 checkpoints/real_baseline/

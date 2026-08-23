@@ -14,7 +14,7 @@ block_stride:
 log_path: logs/real_recurrent.jsonl
 csv_path: logs/real_recurrent.csv
 checkpoint_dir: checkpoints/real_recurrent
-save_every: 1000
+save_every: 5000
 generation:
   enabled: true
   prompt: "Once upon a time, there was a little rabbit"

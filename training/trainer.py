@@ -75,8 +75,8 @@ def write_csv(path: Path, rows) -> None:
 
 
 @torch.no_grad()
-def generate_text_sample(model, tokenizer, prompt: str, config: Dict, device: torch.device) -> str:
-    """Generate a short qualitative sample from the current checkpoint.
+def generate_token_sample(model, tokenizer, prompt: str, config: Dict, device: torch.device):
+    """Generate token ids from the current checkpoint.
 
     This deliberately uses simple full-context decoding instead of a KV cache so
     the same code works for baseline, many-small, and few-rich models.
@@ -91,7 +91,8 @@ def generate_text_sample(model, tokenizer, prompt: str, config: Dict, device: to
 
     model_was_training = model.training
     model.eval()
-    token_ids = tokenizer.encode(prompt, add_eos=False) or [tokenizer.eos_token]
+    prompt_token_ids = tokenizer.encode(prompt, add_eos=False) or [tokenizer.eos_token]
+    token_ids = list(prompt_token_ids)
 
     for _ in range(max_new_tokens):
         context = token_ids[-context_length:]
@@ -109,6 +110,13 @@ def generate_text_sample(model, tokenizer, prompt: str, config: Dict, device: to
 
     if model_was_training:
         model.train()
+    return prompt_token_ids, token_ids
+
+
+def generate_text_sample(model, tokenizer, prompt: str, config: Dict, device: torch.device) -> str:
+    """Return the full decoded prompt plus continuation sample."""
+
+    _, token_ids = generate_token_sample(model, tokenizer, prompt, config, device)
     return tokenizer.decode(token_ids)
 
 
@@ -123,9 +131,14 @@ def maybe_print_generation_sample(model, tokenizer, config: Dict, step: int, dev
     if every_steps > 0 and step % every_steps != 0:
         return
     prompt = gen_cfg.get("prompt", "Once upon a time")
-    sample = generate_text_sample(model, tokenizer, prompt, config, device)
+    prompt_token_ids, sample_token_ids = generate_token_sample(model, tokenizer, prompt, config, device)
+    continuation_token_ids = sample_token_ids[len(prompt_token_ids) :]
+    continuation = tokenizer.decode(continuation_token_ids).replace("\n", " ").strip()
     print(f"\n--- sample step {step:04d} ---")
-    print(sample.replace("\n", " ").strip())
+    print("fed prompt:")
+    print(prompt.replace("\n", " ").strip())
+    print("\npredicted continuation:")
+    print(continuation)
     print("--- end sample ---\n")
 
 

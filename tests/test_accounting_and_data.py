@@ -124,7 +124,10 @@ def test_generation_sample_respects_every_steps(capsys):
     maybe_print_generation_sample(model, ByteTokenizer(), cfg, step=50, device=next(model.parameters()).device)
     assert capsys.readouterr().out == ""
     maybe_print_generation_sample(model, ByteTokenizer(), cfg, step=100, device=next(model.parameters()).device)
-    assert "sample step 0100" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "sample step 0100" in out
+    assert "fed prompt:" in out
+    assert "predicted continuation:" in out
 
 
 def test_real_trainer_cycles_until_max_steps(tmp_path):

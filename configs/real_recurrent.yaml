@@ -6,10 +6,11 @@ batch_size: 64
 learning_rate: 0.0005
 weight_decay: 0.01
 grad_clip: 1.0
-max_steps: 6104
+max_steps:
 num_epochs: 1
 eval_every: 500
-val_fraction: 0.05
+eval_max_batches: 100
+final_eval_max_batches:
 block_stride:
 log_path: logs/real_recurrent.jsonl
 csv_path: logs/real_recurrent.csv
@@ -31,9 +32,19 @@ data:
   source: tinystories
   split: train
   cache_dir: data/hf_cache
+  cache_tokens: true
+  token_cache_dir: data/token_cache
   offline: false
-  max_examples: 250000
-  max_chars: 250000000
+  max_examples:
+  max_chars:
+validation_data:
+  source: tinystories
+  split: validation
+  cache_dir: data/hf_cache
+  token_cache_dir: data/token_cache
+  offline: false
+  max_examples:
+  max_chars:
 model:
   vocab_size: 257
   hidden_size: 128

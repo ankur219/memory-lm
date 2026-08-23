@@ -79,7 +79,7 @@ The recurrent model processes text in chunks. Each chunk receives a fixed set of
 memory + chunk -> Transformer -> token outputs -> update memory
 ```
 
-For the first implementation, prefix memory is read-only inside the chunk. After the chunk is processed, the model pools token outputs and updates each memory vector with a small GRU-style update. This keeps token logits causal while giving the recurrent state a path to summarize the chunk.
+For the first implementation, prefix memory is read-only inside the chunk. After the chunk is processed, the model pools token outputs and updates each memory vector with a low-rank gated update. This keeps token logits causal while giving the recurrent state a path to summarize the chunk.
 
 Persistent memory is counted as:
 
@@ -174,7 +174,10 @@ cd memory-lm
 python3 train_real.py --config configs/real_local_debug.yaml
 ```
 
-The real-text configs train on the same TinyStories slice by default:
+The real-text configs train for one full pass over the TinyStories training
+split and evaluate on the official TinyStories validation split. Token ids are
+cached to disk as `uint16` memmap files so full-dataset runs do not keep the
+entire token stream as a Python list in RAM:
 
 ```yaml
 tokenizer:
@@ -185,21 +188,36 @@ data:
   source: tinystories
   split: train
   cache_dir: data/hf_cache
-  max_examples: 250000
-  max_chars: 250000000
+  cache_tokens: true
+  token_cache_dir: data/token_cache
+  max_examples:
+  max_chars:
+validation_data:
+  source: tinystories
+  split: validation
+  cache_dir: data/hf_cache
+  token_cache_dir: data/token_cache
+  max_examples:
+  max_chars:
 ```
 
-The default real comparison is token-budgeted at about 50M tokens per model:
+The default real comparison is epoch-budgeted:
 
 ```text
-batch_size x context_length x max_steps = 64 x 128 x 6104 = 50,003,968 tokens
+planned_steps = ceil(full_train_blocks / batch_size)
+planned_train_tokens ~= full TinyStories GPT-2-tokenized train split
 ```
 
-Validation loss is computed every 500 steps, and qualitative samples are printed
-every 1000 steps. Each sample prints the fed prompt separately from the
-predicted continuation, so it is clear what the model received and what it
-generated. When `max_steps` is set, training cycles through the dataset as many
-times as needed to reach the token budget.
+Validation loss is computed every 500 steps on a capped validation subset
+(`eval_max_batches: 100`) to keep training moving. The final validation pass is
+full because `final_eval_max_batches` is unset. The CSV logs include
+`validation_batches` and `validation_full` so capped and full validation rows
+are explicit.
+
+Qualitative samples are printed every 1000 steps. Each sample prints the fed
+prompt separately from the predicted continuation, so it is clear what the
+model received and what it generated. When `max_steps` is unset, `num_epochs: 1`
+means one pass over the available training blocks.
 
 Real-data runs also save checkpoints every 5000 steps and at the end:
 

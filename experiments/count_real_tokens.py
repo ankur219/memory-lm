@@ -10,10 +10,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from data.text import build_lm_datasets, tokenizer_metadata
+from data.text import tokenizer_metadata
 from evaluation.efficiency import parameter_breakdown
 from evaluation.efficiency import per_token_memory_budget
-from training.trainer import build_model, load_real_text_from_config, memory_budget_for_model
+from training.trainer import build_model, build_real_lm_datasets_from_config, memory_budget_for_model
 from models import TransformerConfig
 
 
@@ -24,15 +24,8 @@ def load_description(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
-    text = load_real_text_from_config(cfg)
     context_length = int(cfg["model"]["context_length"])
-    train_ds, val_ds, tokenizer = build_lm_datasets(
-        text,
-        block_size=context_length,
-        val_fraction=float(cfg.get("val_fraction", 0.05)),
-        tokenizer_config=cfg.get("tokenizer"),
-        block_stride=cfg.get("block_stride"),
-    )
+    train_ds, val_ds, tokenizer = build_real_lm_datasets_from_config(cfg)
 
     model_cfg_dict = dict(cfg["model"])
     model_cfg_dict["vocab_size"] = tokenizer.vocab_size
@@ -43,14 +36,18 @@ def load_description(config_path: Path) -> dict:
     num_epochs = int(cfg.get("num_epochs", 1))
     max_steps = cfg.get("max_steps")
     planned_steps = int(max_steps) if max_steps is not None else steps_per_epoch * num_epochs
-    planned_tokens = planned_steps * batch_size * context_length
+    if max_steps is not None:
+        planned_tokens = planned_steps * batch_size * context_length
+    else:
+        planned_tokens = len(train_ds) * context_length * num_epochs
     planned_data_passes = planned_steps / max(1, steps_per_epoch)
 
     return {
         "config_name": config_path.name,
         "model_name": cfg["model_name"],
         "tokenizer": tokenizer_metadata(tokenizer),
-        "text_chars": len(text),
+        "train_tokens": len(train_ds) * context_length,
+        "validation_tokens": len(val_ds) * context_length,
         "train_blocks": len(train_ds),
         "validation_blocks": len(val_ds),
         "context_length": context_length,
@@ -70,7 +67,8 @@ def print_description(desc: dict) -> None:
     print(f"\n{desc['config_name']}")
     print(f"  model: {desc['model_name']}")
     print(f"  tokenizer: {desc['tokenizer']}")
-    print(f"  text chars: {desc['text_chars']:,}")
+    print(f"  train tokens per epoch: {desc['train_tokens']:,}")
+    print(f"  validation tokens per eval: {desc['validation_tokens']:,}")
     print(f"  train blocks: {desc['train_blocks']:,}")
     print(f"  validation blocks: {desc['validation_blocks']:,}")
     print(f"  context_length: {desc['context_length']}")

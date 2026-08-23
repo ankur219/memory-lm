@@ -9,7 +9,7 @@ import torch
 
 
 @torch.no_grad()
-def evaluate_loss(model, dataloader: Iterable, device: torch.device) -> float:
+def evaluate_loss(model, dataloader: Iterable, device: torch.device, max_batches: int | None = None) -> float:
     model.eval()
     total_loss = 0.0
     total_batches = 0
@@ -19,10 +19,11 @@ def evaluate_loss(model, dataloader: Iterable, device: torch.device) -> float:
         out = model(input_ids, targets=targets)
         total_loss += float(out["loss"].item())
         total_batches += 1
+        if max_batches is not None and total_batches >= max_batches:
+            break
     model.train()
     return total_loss / max(1, total_batches)
 
 
 def perplexity(loss: float) -> float:
     return math.exp(min(20.0, loss))
-

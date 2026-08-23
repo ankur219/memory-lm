@@ -13,7 +13,14 @@ import torch
 from torch.utils.data import DataLoader, random_split
 
 from data.synthetic import KeyValueRetrievalDataset, collate_batch
-from data.text import build_lm_datasets, load_text_file, load_tinystories_text, tokenizer_metadata
+from data.text import (
+    build_lm_datasets,
+    build_lm_datasets_from_texts,
+    build_tinystories_memmap_datasets,
+    load_text_file,
+    load_tinystories_text,
+    tokenizer_metadata,
+)
 from evaluation.efficiency import (
     baseline_kv_memory_budget,
     parameter_breakdown,
@@ -283,6 +290,60 @@ def load_real_text_from_config(config: Dict) -> str:
     raise ValueError("data.source must be 'tinystories' or 'text_file'")
 
 
+def load_validation_text_from_config(config: Dict) -> Optional[str]:
+    val_cfg = config.get("validation_data")
+    if not val_cfg:
+        return None
+    source = val_cfg.get("source", "tinystories")
+    max_chars = val_cfg.get("max_chars")
+    if source == "tinystories":
+        return load_tinystories_text(
+            split=val_cfg.get("split", "validation"),
+            max_examples=val_cfg.get("max_examples"),
+            max_chars=max_chars,
+            cache_dir=val_cfg.get("cache_dir", "data/hf_cache"),
+            offline=bool(val_cfg.get("offline", config.get("data", {}).get("offline", False))),
+        )
+    if source == "text_file":
+        return load_text_file(val_cfg["path"], max_chars=max_chars)
+    raise ValueError("validation_data.source must be 'tinystories' or 'text_file'")
+
+
+def build_real_lm_datasets_from_config(config: Dict):
+    """Build real-data train/validation datasets from a config.
+
+    For full TinyStories runs, prefer the memmap path. It uses the official
+    TinyStories train and validation splits without materializing all token ids
+    as a Python list.
+    """
+
+    block_size = int(config["model"]["context_length"])
+    block_stride = config.get("block_stride")
+    data_cfg = config.get("data", {})
+    if data_cfg.get("cache_tokens", False):
+        if data_cfg.get("source", "tinystories") != "tinystories":
+            raise ValueError("cache_tokens is currently implemented for TinyStories only.")
+        return build_tinystories_memmap_datasets(config, block_size=block_size, block_stride=block_stride)
+
+    train_text = load_real_text_from_config(config)
+    validation_text = load_validation_text_from_config(config)
+    if validation_text is not None:
+        return build_lm_datasets_from_texts(
+            train_text,
+            validation_text,
+            block_size=block_size,
+            tokenizer_config=config.get("tokenizer", {"kind": "tiktoken", "encoding": "gpt2"}),
+            block_stride=block_stride,
+        )
+    return build_lm_datasets(
+        train_text,
+        block_size=block_size,
+        val_fraction=float(config.get("val_fraction", 0.05)),
+        tokenizer_config=config.get("tokenizer", {"kind": "tiktoken", "encoding": "gpt2"}),
+        block_stride=block_stride,
+    )
+
+
 def train_language_model(config: Dict) -> Dict:
     """Train next-token LM on real text.
 
@@ -297,14 +358,7 @@ def train_language_model(config: Dict) -> Dict:
         requested_device = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(requested_device)
 
-    text = load_real_text_from_config(config)
-    train_ds, val_ds, tokenizer = build_lm_datasets(
-        text,
-        block_size=int(config["model"]["context_length"]),
-        val_fraction=float(config.get("val_fraction", 0.05)),
-        tokenizer_config=config.get("tokenizer", {"kind": "tiktoken", "encoding": "gpt2"}),
-        block_stride=config.get("block_stride"),
-    )
+    train_ds, val_ds, tokenizer = build_real_lm_datasets_from_config(config)
     model_cfg_dict = dict(config["model"])
     model_cfg_dict["vocab_size"] = tokenizer.vocab_size
     model_cfg = TransformerConfig(**model_cfg_dict)
@@ -330,6 +384,12 @@ def train_language_model(config: Dict) -> Dict:
     max_steps = int(max_steps_cfg) if max_steps_cfg is not None else None
     num_epochs = int(config.get("num_epochs", 1))
     eval_every = int(config.get("eval_every", 50))
+    eval_max_batches_cfg = config.get("eval_max_batches")
+    eval_max_batches = int(eval_max_batches_cfg) if eval_max_batches_cfg is not None else None
+    final_eval_max_batches_cfg = config.get("final_eval_max_batches")
+    final_eval_max_batches = (
+        int(final_eval_max_batches_cfg) if final_eval_max_batches_cfg is not None else None
+    )
     checkpoint_dir_cfg = config.get("checkpoint_dir")
     checkpoint_dir = Path(checkpoint_dir_cfg) if checkpoint_dir_cfg else None
     save_every = int(config.get("save_every", 0))
@@ -338,7 +398,7 @@ def train_language_model(config: Dict) -> Dict:
     epoch = 0
     while True:
         epoch += 1
-        for input_ids, targets in train_loader:
+        for batch_idx, (input_ids, targets) in enumerate(train_loader, start=1):
             step += 1
             input_ids = input_ids.to(device)
             targets = targets.to(device)
@@ -351,10 +411,12 @@ def train_language_model(config: Dict) -> Dict:
             tokens_processed += int(input_ids.numel())
 
             is_last_step = max_steps is not None and step >= max_steps
-            is_epoch_end = step % len(train_loader) == 0
-            should_eval = step == 1 or step % eval_every == 0 or is_last_step or is_epoch_end
+            is_epoch_end = batch_idx == len(train_loader)
+            is_final_step = is_last_step or (max_steps is None and is_epoch_end and epoch >= num_epochs)
+            should_eval = step == 1 or step % eval_every == 0 or is_final_step or is_epoch_end
             if should_eval:
-                val_loss = evaluate_loss(model, val_loader, device)
+                val_limit = final_eval_max_batches if is_final_step else eval_max_batches
+                val_loss = evaluate_loss(model, val_loader, device, max_batches=val_limit)
                 elapsed = time.time() - start_time
                 peak_gpu_mb = (
                     torch.cuda.max_memory_allocated() / (1024**2) if device.type == "cuda" else 0.0
@@ -364,6 +426,8 @@ def train_language_model(config: Dict) -> Dict:
                     "epoch": epoch,
                     "train_loss": float(loss.item()),
                     "validation_loss": float(val_loss),
+                    "validation_batches": len(val_loader) if val_limit is None else min(val_limit, len(val_loader)),
+                    "validation_full": val_limit is None or val_limit >= len(val_loader),
                     "tokens_processed": tokens_processed,
                     "training_time_sec": elapsed,
                     "tokens_per_sec": tokens_processed / max(elapsed, 1e-9),
@@ -412,7 +476,7 @@ def train_language_model(config: Dict) -> Dict:
         "dataset": {
             "num_train_blocks": len(train_ds),
             "num_validation_blocks": len(val_ds),
-            "num_text_chars": len(text),
+            "num_text_chars": None,
             "context_length": model_cfg.context_length,
             "block_stride": train_ds.stride,
             "train_tokens_per_epoch": len(train_ds) * model_cfg.context_length,

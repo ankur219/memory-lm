@@ -185,9 +185,18 @@ data:
   source: tinystories
   split: train
   cache_dir: data/hf_cache
-  max_examples: 1000
-  max_chars: 1000000
+  max_examples: 50000
+  max_chars: 50000000
 ```
+
+The default real comparison is token-budgeted at about 10M tokens per model:
+
+```text
+batch_size x context_length x max_steps = 8 x 128 x 9766 = 10,000,384 tokens
+```
+
+Validation loss is computed every 500 steps, and qualitative samples are printed
+every 100 steps.
 
 ## 30M-50M Starting Scale
 

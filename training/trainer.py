@@ -301,7 +301,8 @@ def train_language_model(config: Dict) -> Dict:
 
             is_last_step = max_steps is not None and step >= max_steps
             is_epoch_end = step % len(train_loader) == 0
-            if step == 1 or step % eval_every == 0 or is_last_step or is_epoch_end:
+            should_eval = step == 1 or step % eval_every == 0 or is_last_step or is_epoch_end
+            if should_eval:
                 val_loss = evaluate_loss(model, val_loader, device)
                 elapsed = time.time() - start_time
                 peak_gpu_mb = (
@@ -320,7 +321,7 @@ def train_language_model(config: Dict) -> Dict:
                 log_rows.append(row)
                 append_jsonl(log_path, {"event": "metrics", **row})
                 print(f"step {step:04d} | train {row['train_loss']:.4f} | val {val_loss:.4f}")
-                maybe_print_generation_sample(model, tokenizer, config, step, device)
+            maybe_print_generation_sample(model, tokenizer, config, step, device)
 
             if max_steps is not None and step >= max_steps:
                 break

@@ -116,6 +116,12 @@ def maybe_print_generation_sample(model, tokenizer, config: Dict, step: int, dev
     gen_cfg = config.get("generation", {})
     if not gen_cfg or not bool(gen_cfg.get("enabled", False)):
         return
+    every_steps = int(gen_cfg.get("every_steps", config.get("eval_every", 50)))
+    print_at_step_one = bool(gen_cfg.get("print_at_step_one", False))
+    if step == 1 and not print_at_step_one:
+        return
+    if every_steps > 0 and step % every_steps != 0:
+        return
     prompt = gen_cfg.get("prompt", "Once upon a time")
     sample = generate_text_sample(model, tokenizer, prompt, config, device)
     print(f"\n--- sample step {step:04d} ---")

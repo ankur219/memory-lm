@@ -10,7 +10,7 @@ from evaluation.efficiency import (
     recurrent_memory_budget,
 )
 from models import PerTokenMemoryTransformer, TransformerConfig
-from training.trainer import generate_text_sample
+from training.trainer import generate_text_sample, maybe_print_generation_sample
 
 
 def test_key_value_dataset_marks_only_answer_target():
@@ -99,3 +99,29 @@ def test_generation_sample_uses_tokenizer():
     sample = generate_text_sample(model, ByteTokenizer(), "Once", cfg, device=next(model.parameters()).device)
     assert isinstance(sample, str)
     assert sample.startswith("Once")
+
+
+def test_generation_sample_respects_every_steps(capsys):
+    cfg = {
+        "model": {"context_length": 16},
+        "generation": {
+            "enabled": True,
+            "prompt": "Once",
+            "max_new_tokens": 2,
+            "every_steps": 100,
+            "print_at_step_one": False,
+        },
+    }
+    model_cfg = TransformerConfig(
+        vocab_size=BYTE_VOCAB_SIZE,
+        hidden_size=32,
+        num_layers=1,
+        num_heads=4,
+        context_length=16,
+        memory_dim=16,
+    )
+    model = PerTokenMemoryTransformer(model_cfg)
+    maybe_print_generation_sample(model, ByteTokenizer(), cfg, step=50, device=next(model.parameters()).device)
+    assert capsys.readouterr().out == ""
+    maybe_print_generation_sample(model, ByteTokenizer(), cfg, step=100, device=next(model.parameters()).device)
+    assert "sample step 0100" in capsys.readouterr().out

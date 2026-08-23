@@ -17,6 +17,8 @@ generation:
   enabled: true
   prompt: "Once upon a time, there was a little rabbit"
   max_new_tokens: 80
+  every_steps: 100
+  print_at_step_one: false
   temperature: 0.8
   top_k: 50
 tokenizer:

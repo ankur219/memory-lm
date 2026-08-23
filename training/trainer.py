@@ -74,6 +74,55 @@ def write_csv(path: Path, rows) -> None:
         writer.writerows(rows)
 
 
+@torch.no_grad()
+def generate_text_sample(model, tokenizer, prompt: str, config: Dict, device: torch.device) -> str:
+    """Generate a short qualitative sample from the current checkpoint.
+
+    This deliberately uses simple full-context decoding instead of a KV cache so
+    the same code works for baseline, many-small, and few-rich models.
+    """
+
+    gen_cfg = config.get("generation", {})
+    max_new_tokens = int(gen_cfg.get("max_new_tokens", 80))
+    temperature = float(gen_cfg.get("temperature", 0.8))
+    top_k = gen_cfg.get("top_k", 50)
+    top_k = int(top_k) if top_k is not None else None
+    context_length = int(config["model"]["context_length"])
+
+    model_was_training = model.training
+    model.eval()
+    token_ids = tokenizer.encode(prompt, add_eos=False) or [tokenizer.eos_token]
+
+    for _ in range(max_new_tokens):
+        context = token_ids[-context_length:]
+        input_ids = torch.tensor(context, dtype=torch.long, device=device).unsqueeze(0)
+        logits = model(input_ids)["logits"][0, -1]
+        logits = logits / max(temperature, 1e-6)
+        if top_k is not None and top_k < logits.numel():
+            values, _ = torch.topk(logits, top_k)
+            logits = logits.masked_fill(logits < values[-1], torch.finfo(logits.dtype).min)
+        probs = torch.softmax(logits, dim=-1)
+        next_token = int(torch.multinomial(probs, num_samples=1).item())
+        token_ids.append(next_token)
+        if next_token == tokenizer.eos_token:
+            break
+
+    if model_was_training:
+        model.train()
+    return tokenizer.decode(token_ids)
+
+
+def maybe_print_generation_sample(model, tokenizer, config: Dict, step: int, device: torch.device) -> None:
+    gen_cfg = config.get("generation", {})
+    if not gen_cfg or not bool(gen_cfg.get("enabled", False)):
+        return
+    prompt = gen_cfg.get("prompt", "Once upon a time")
+    sample = generate_text_sample(model, tokenizer, prompt, config, device)
+    print(f"\n--- sample step {step:04d} ---")
+    print(sample.replace("\n", " ").strip())
+    print("--- end sample ---\n")
+
+
 def train_synthetic(config: Dict) -> Dict:
     seed = int(config.get("seed", 0))
     torch.manual_seed(seed)
@@ -265,6 +314,7 @@ def train_language_model(config: Dict) -> Dict:
                 log_rows.append(row)
                 append_jsonl(log_path, {"event": "metrics", **row})
                 print(f"step {step:04d} | train {row['train_loss']:.4f} | val {val_loss:.4f}")
+                maybe_print_generation_sample(model, tokenizer, config, step, device)
 
             if max_steps is not None and step >= max_steps:
                 break

@@ -13,6 +13,12 @@ val_fraction: 0.05
 block_stride:
 log_path: logs/real_recurrent.jsonl
 csv_path: logs/real_recurrent.csv
+generation:
+  enabled: true
+  prompt: "Once upon a time, there was a little rabbit"
+  max_new_tokens: 80
+  temperature: 0.8
+  top_k: 50
 tokenizer:
   kind: tiktoken
   encoding: gpt2

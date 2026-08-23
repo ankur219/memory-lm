@@ -10,6 +10,7 @@ from evaluation.efficiency import (
     recurrent_memory_budget,
 )
 from models import PerTokenMemoryTransformer, TransformerConfig
+from training.trainer import generate_text_sample
 
 
 def test_key_value_dataset_marks_only_answer_target():
@@ -73,3 +74,28 @@ def test_tiktoken_tokenizer_round_trip():
     assert tokenizer.vocab_size == 50257
     assert tokens[-1] == tokenizer.eos_token
     assert "research" in tokenizer.decode(tokens[:-1])
+
+
+def test_generation_sample_uses_tokenizer():
+    cfg = {
+        "model": {
+            "context_length": 16,
+        },
+        "generation": {
+            "max_new_tokens": 4,
+            "temperature": 1.0,
+            "top_k": 10,
+        },
+    }
+    model_cfg = TransformerConfig(
+        vocab_size=BYTE_VOCAB_SIZE,
+        hidden_size=32,
+        num_layers=1,
+        num_heads=4,
+        context_length=16,
+        memory_dim=16,
+    )
+    model = PerTokenMemoryTransformer(model_cfg)
+    sample = generate_text_sample(model, ByteTokenizer(), "Once", cfg, device=next(model.parameters()).device)
+    assert isinstance(sample, str)
+    assert sample.startswith("Once")

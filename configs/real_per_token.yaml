@@ -2,7 +2,7 @@ task: real_lm
 seed: 0
 model_name: per_token
 device: auto
-batch_size: 64
+batch_size: 128
 learning_rate: 0.0005
 weight_decay: 0.01
 grad_clip: 1.0

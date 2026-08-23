@@ -201,7 +201,7 @@ validation_data:
   max_chars:
 ```
 
-The default real comparison is epoch-budgeted:
+The default real comparison uses `batch_size: 128` and is epoch-budgeted:
 
 ```text
 planned_steps = ceil(full_train_blocks / batch_size)

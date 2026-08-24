@@ -26,6 +26,7 @@ EOS = 2
 QUERY = 3
 ANSWER = 4
 COPY = 5
+NEEDLE = 6
 KEY_OFFSET = 10
 
 
@@ -156,6 +157,69 @@ class CopyDataset(Dataset):
                 tokens[copy_start + 1 : copy_start + 1 + self.copy_length],
                 dtype=torch.long,
             )
+        return input_ids, targets
+
+
+class NeedleDataset(Dataset):
+    """Needle-in-context retrieval.
+
+    Each example places one value token after a <NEEDLE> marker, surrounds it
+    with random filler, and asks for the value near the end:
+
+        <BOS> filler <NEEDLE> value filler <QUERY> <ANSWER> value <EOS>
+
+    The gap after the needle controls how long the model must preserve the
+    exact value.
+    """
+
+    def __init__(
+        self,
+        num_examples: int = 1000,
+        prefix_length: int = 8,
+        gap_length: int = 32,
+        vocab_tokens: int = 64,
+        num_values: int = 64,
+        seed: int = 0,
+        supervise_all_tokens: bool = True,
+    ):
+        super().__init__()
+        self.prefix_length = int(prefix_length)
+        self.gap_length = int(gap_length)
+        self.vocab_tokens = int(vocab_tokens)
+        self.num_values = int(num_values)
+        self.supervise_all_tokens = supervise_all_tokens
+        self.value_offset = KEY_OFFSET + self.vocab_tokens
+        self.vocab_size = self.value_offset + self.num_values
+        self.examples = [
+            self._make_example(random.Random(seed + i)) for i in range(num_examples)
+        ]
+
+    def _filler_token(self, rng: random.Random) -> int:
+        return KEY_OFFSET + rng.randrange(self.vocab_tokens)
+
+    def _value_token(self, value_id: int) -> int:
+        return self.value_offset + value_id
+
+    def _make_example(self, rng: random.Random) -> Tuple[List[int], int]:
+        value_id = rng.randrange(self.num_values)
+        value = self._value_token(value_id)
+        prefix = [self._filler_token(rng) for _ in range(self.prefix_length)]
+        gap = [self._filler_token(rng) for _ in range(self.gap_length)]
+        tokens = [BOS] + prefix + [NEEDLE, value] + gap + [QUERY, ANSWER, value, EOS]
+        answer_index = len(tokens) - 2
+        return tokens, answer_index
+
+    def __len__(self) -> int:
+        return len(self.examples)
+
+    def __getitem__(self, idx: int):
+        tokens, answer_index = self.examples[idx]
+        input_ids = torch.tensor(tokens[:-1], dtype=torch.long)
+        if self.supervise_all_tokens:
+            targets = torch.tensor(tokens[1:], dtype=torch.long)
+        else:
+            targets = torch.full_like(input_ids, -100)
+            targets[answer_index - 1] = tokens[answer_index]
         return input_ids, targets
 
 

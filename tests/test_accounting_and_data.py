@@ -1,6 +1,6 @@
 import pytest
 
-from data.synthetic import ANSWER, COPY, KEY_OFFSET, CopyDataset, KeyValueRetrievalDataset
+from data.synthetic import ANSWER, COPY, NEEDLE, KEY_OFFSET, CopyDataset, KeyValueRetrievalDataset, NeedleDataset
 from data.text import BYTE_VOCAB_SIZE, ByteTokenizer, TiktokenTokenizer, build_lm_datasets
 from evaluation.efficiency import (
     matched_recurrent_dim_for_per_token,
@@ -49,6 +49,15 @@ def test_copy_dataset_marks_copy_span_when_sparse():
     supervised = (targets != -100).nonzero().flatten()
     assert supervised.numel() == 6
     assert supervised[0].item() == marker_pos
+
+
+def test_needle_dataset_marks_answer_when_sparse():
+    ds = NeedleDataset(num_examples=4, prefix_length=3, gap_length=5, seed=123, supervise_all_tokens=False)
+    input_ids, targets = ds[0]
+    assert (input_ids == NEEDLE).sum().item() == 1
+    supervised = (targets != -100).nonzero().flatten()
+    assert supervised.numel() == 1
+    assert input_ids[supervised.item()].item() == ANSWER
 
 
 def test_parameter_breakdown_has_requested_buckets():

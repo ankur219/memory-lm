@@ -163,6 +163,39 @@ Interpretation: baseline and per-token copy almost perfectly up to length 64.
 The recurrent model collapses after length 16, suggesting the few-rich summary
 state loses exact token details under this update policy.
 
+### Recurrent Shape Sweep
+
+This sweep keeps recurrent persistent memory fixed at 32,768 floats while
+changing the number and width of memory slots.
+
+Command:
+
+```bash
+python experiments/run_copy_sweep.py \
+  --lengths 16 32 64 \
+  --models recurrent \
+  --recurrent-shapes 8x4096 16x2048 32x1024 64x512 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --csv-path logs/copy_recurrent_shape_sweep.csv
+```
+
+Result:
+
+| Recurrent Shape | Length 16 | Length 32 | Length 64 |
+|---|---:|---:|---:|
+| 8x4096 | 0.942 | 0.045 | 0.030 |
+| 16x2048 | 0.942 | 0.057 | 0.031 |
+| 32x1024 | 0.942 | 0.046 | 0.030 |
+| 64x512 | 0.942 | 0.069 | 0.031 |
+
+Interpretation: changing recurrent slot allocation does not solve the copy
+collapse. More slots help slightly at length 32, but all shapes remain near
+chance at length 64. This suggests the current recurrent update loses exact
+sequence detail, not merely that it has too few slots.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
@@ -176,5 +209,5 @@ shifted and random binding remain difficult for these small models.
 
 Next useful experiments:
 
-1. Sweep recurrent memory allocation: `8 x 4096`, `16 x 2048`, `32 x 1024`, `64 x 512`.
-2. Add a needle-in-context probe.
+1. Add a needle-in-context probe.
+2. Test stronger recurrent update policies.

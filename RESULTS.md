@@ -69,6 +69,37 @@ Result:
 
 Interpretation: all models can learn the retrieval format when the value rule is simple.
 
+### Shifted Values
+
+Command:
+
+```bash
+python experiments/run_kv_sweep.py \
+  --pairs 4 8 16 32 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --num-keys 32 \
+  --num-values 32 \
+  --answer-loss-weight 10 \
+  --value-mode shifted \
+  --csv-path logs/kv_sweep_shifted.csv
+```
+
+Result:
+
+| Pairs | Baseline | Per-token | Recurrent |
+|---:|---:|---:|---:|
+| 4 | 0.251 | 0.251 | 0.247 |
+| 8 | 0.124 | 0.119 | 0.114 |
+| 16 | 0.062 | 0.056 | 0.043 |
+| 32 | 0.035 | 0.031 | 0.028 |
+
+Interpretation: shifted values were not the hoped-for middle-difficulty task.
+The models are near chance by 16-32 pairs, so this task is mostly too hard at
+the current scale.
+
 ### Random Values, Easier Setting
 
 Command:
@@ -103,8 +134,12 @@ The current evidence supports a cautious statement:
 
 > Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and generally stronger random key-value retrieval than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
 
+The KV probes also show that task design matters: identity retrieval is solved,
+but shifted and random binding remain difficult for these small models. The next
+synthetic benchmark should therefore use a different shape, such as exact
+copying or needle-in-context, rather than further tweaking KV alone.
+
 Next useful experiments:
 
-1. Add a middle-difficulty `shifted` value mode.
+1. Add copy and needle-in-context probes.
 2. Sweep memory allocation: recurrent `8 x 4096`, `16 x 2048`, `32 x 1024`, `64 x 512`.
-3. Add copy and needle-in-context probes.

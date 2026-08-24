@@ -196,18 +196,54 @@ collapse. More slots help slightly at length 32, but all shapes remain near
 chance at length 64. This suggests the current recurrent update loses exact
 sequence detail, not merely that it has too few slots.
 
+## Synthetic Needle
+
+The needle task tests recalling one exact value after filler:
+
+```text
+<BOS> filler <NEEDLE> value filler <QUERY> <ANSWER> value <EOS>
+```
+
+The metric is answer-token accuracy.
+
+Command:
+
+```bash
+python experiments/run_needle_sweep.py \
+  --gaps 8 16 32 64 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --answer-loss-weight 10 \
+  --csv-path logs/needle_sweep.csv
+```
+
+Result:
+
+| Gap Length | Baseline | Per-token | Recurrent |
+|---:|---:|---:|---:|
+| 8 | 1.000 | 1.000 | 1.000 |
+| 16 | 1.000 | 1.000 | 1.000 |
+| 32 | 1.000 | 1.000 | 0.016 |
+| 64 | 1.000 | 1.000 | 0.015 |
+
+Interpretation: baseline and per-token recall the needle perfectly up to gap
+64. The recurrent model collapses after gap 16, matching the copy-task failure
+mode.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
 
 > Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and generally stronger random key-value retrieval than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
 
-The copy result is the cleanest synthetic evidence so far: per-token memory
+Copy and needle are the cleanest synthetic evidence so far: per-token memory
 preserves exact details far better than the current recurrent memory design. The
 KV probes also show that task design matters: identity retrieval is solved, but
 shifted and random binding remain difficult for these small models.
 
 Next useful experiments:
 
-1. Add a needle-in-context probe.
-2. Test stronger recurrent update policies.
+1. Test stronger recurrent update policies.
+2. Add a second real-text dataset.

@@ -122,6 +122,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
         num_values=args.num_values,
         seed=seed,
         supervise_all_tokens=args.supervise_all_tokens,
+        value_mode=args.value_mode,
     )
     test_ds = KeyValueRetrievalDataset(
         num_examples=args.test_examples,
@@ -130,6 +131,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
         num_values=args.num_values,
         seed=seed + 1_000_000,
         supervise_all_tokens=args.supervise_all_tokens,
+        value_mode=args.value_mode,
     )
     val_size = max(1, int(0.1 * len(train_val)))
     train_size = len(train_val) - val_size
@@ -185,6 +187,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
         "sequence_length": seq_len,
         "steps": args.steps,
         "supervise_all_tokens": args.supervise_all_tokens,
+        "value_mode": args.value_mode,
         "answer_loss_weight": args.answer_loss_weight,
         "train_loss": last_loss,
         "test_answer_accuracy": test_acc,
@@ -206,6 +209,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-keys", type=int, default=128)
     parser.add_argument("--num-values", type=int, default=100)
+    parser.add_argument("--value-mode", choices=["random", "identity"], default="random")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)

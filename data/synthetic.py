@@ -57,9 +57,13 @@ class KeyValueRetrievalDataset(Dataset):
         num_values: int = 100,
         seed: int = 0,
         supervise_all_tokens: bool = False,
+        value_mode: str = "random",
     ):
         super().__init__()
+        if value_mode not in {"random", "identity"}:
+            raise ValueError("value_mode must be 'random' or 'identity'")
         self.supervise_all_tokens = supervise_all_tokens
+        self.value_mode = value_mode
         self.vocab = SyntheticVocab(num_keys=num_keys, num_values=num_values)
         self.examples = [
             self._make_example(random.Random(seed + i), num_pairs) for i in range(num_examples)
@@ -67,7 +71,10 @@ class KeyValueRetrievalDataset(Dataset):
 
     def _make_example(self, rng: random.Random, num_pairs: int) -> Tuple[List[int], int]:
         keys = rng.sample(range(self.vocab.num_keys), k=num_pairs)
-        values = [rng.randrange(self.vocab.num_values) for _ in range(num_pairs)]
+        if self.value_mode == "identity":
+            values = [key % self.vocab.num_values for key in keys]
+        else:
+            values = [rng.randrange(self.vocab.num_values) for _ in range(num_pairs)]
         pairs: Dict[int, int] = dict(zip(keys, values))
         query_key = rng.choice(keys)
 

@@ -128,18 +128,53 @@ Result:
 
 Interpretation: arbitrary in-context key-value binding is much harder. Per-token is generally strongest among the memory-compressed variants, while recurrent lags at 16 pairs.
 
+## Synthetic Copy
+
+The copy task tests exact token preservation:
+
+```text
+<BOS> x1 x2 ... xn <COPY> x1 x2 ... xn <EOS>
+```
+
+The metric is copy-span token accuracy.
+
+Command:
+
+```bash
+python experiments/run_copy_sweep.py \
+  --lengths 8 16 32 64 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --csv-path logs/copy_sweep.csv
+```
+
+Result:
+
+| Copy Length | Baseline | Per-token | Recurrent |
+|---:|---:|---:|---:|
+| 8 | 1.000 | 1.000 | 1.000 |
+| 16 | 1.000 | 1.000 | 0.942 |
+| 32 | 1.000 | 1.000 | 0.045 |
+| 64 | 1.000 | 1.000 | 0.030 |
+
+Interpretation: baseline and per-token copy almost perfectly up to length 64.
+The recurrent model collapses after length 16, suggesting the few-rich summary
+state loses exact token details under this update policy.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
 
 > Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and generally stronger random key-value retrieval than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
 
-The KV probes also show that task design matters: identity retrieval is solved,
-but shifted and random binding remain difficult for these small models. The next
-synthetic benchmark should therefore use a different shape, such as exact
-copying or needle-in-context, rather than further tweaking KV alone.
+The copy result is the cleanest synthetic evidence so far: per-token memory
+preserves exact details far better than the current recurrent memory design. The
+KV probes also show that task design matters: identity retrieval is solved, but
+shifted and random binding remain difficult for these small models.
 
 Next useful experiments:
 
-1. Add copy and needle-in-context probes.
-2. Sweep memory allocation: recurrent `8 x 4096`, `16 x 2048`, `32 x 1024`, `64 x 512`.
+1. Sweep recurrent memory allocation: `8 x 4096`, `16 x 2048`, `32 x 1024`, `64 x 512`.
+2. Add a needle-in-context probe.

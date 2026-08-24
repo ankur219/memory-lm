@@ -42,7 +42,22 @@ def copy_accuracy(model, dataloader, device: torch.device) -> float:
     return correct / max(1, total)
 
 
-def make_config(model_name: str, copy_length: int, vocab_size: int) -> TransformerConfig:
+def parse_recurrent_shape(shape: str) -> tuple[int, int]:
+    """Parse strings like '16x2048' into (num_memory_tokens, memory_dim)."""
+
+    try:
+        tokens, dim = shape.lower().split("x", maxsplit=1)
+        return int(tokens), int(dim)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("recurrent shapes must look like 8x4096") from exc
+
+
+def make_config(
+    model_name: str,
+    copy_length: int,
+    vocab_size: int,
+    recurrent_shape: tuple[int, int] | None = None,
+) -> TransformerConfig:
     seq_len = 2 * copy_length + 3
     context_length = max(32, seq_len)
     cfg = TransformerConfig(
@@ -55,7 +70,7 @@ def make_config(model_name: str, copy_length: int, vocab_size: int) -> Transform
         dropout=0.0,
         tie_embeddings=True,
         memory_dim=64,
-        num_memory_tokens=8,
+        num_memory_tokens=recurrent_shape[0] if recurrent_shape is not None else 8,
         recurrent_update_rank=4,
         recurrent_compressed_attention=True,
         recurrent_learned_initial=False,
@@ -63,15 +78,18 @@ def make_config(model_name: str, copy_length: int, vocab_size: int) -> Transform
         chunk_size=32,
     )
     if model_name == "recurrent":
-        cfg.recurrent_memory_dim = matched_recurrent_dim_for_per_token(
-            cfg,
-            sequence_length=seq_len,
-            num_memory_tokens=cfg.num_memory_tokens,
-        )
+        if recurrent_shape is not None:
+            cfg.recurrent_memory_dim = recurrent_shape[1]
+        else:
+            cfg.recurrent_memory_dim = matched_recurrent_dim_for_per_token(
+                cfg,
+                sequence_length=seq_len,
+                num_memory_tokens=cfg.num_memory_tokens,
+            )
     return cfg
 
 
-def train_one(model_name: str, copy_length: int, args) -> dict:
+def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[int, int] | None = None) -> dict:
     seed = args.seed + copy_length * 100
     torch.manual_seed(seed)
     requested_device = args.device
@@ -104,7 +122,12 @@ def train_one(model_name: str, copy_length: int, args) -> dict:
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
 
-    cfg = make_config(model_name, copy_length, train_val.vocab_size)
+    cfg = make_config(model_name, copy_length, train_val.vocab_size, recurrent_shape=recurrent_shape)
+    shape_label = (
+        f"{cfg.num_memory_tokens}x{cfg.recurrent_memory_dim}"
+        if model_name == "recurrent"
+        else ""
+    )
     model = build_model(model_name, cfg).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
@@ -132,7 +155,7 @@ def train_one(model_name: str, copy_length: int, args) -> dict:
             if step == 1 or step % args.log_every == 0 or step == args.steps:
                 val_acc = copy_accuracy(model, val_loader, device)
                 print(
-                    f"length {copy_length:03d} | {model_name:9s} | "
+                    f"length {copy_length:03d} | {model_name:9s} | {shape_label:9s} | "
                     f"step {step:04d} | loss {last_loss:.4f} | copy_acc {val_acc:.3f}",
                     flush=True,
                 )
@@ -147,6 +170,7 @@ def train_one(model_name: str, copy_length: int, args) -> dict:
     peak_gpu_mb = torch.cuda.max_memory_allocated() / (1024**2) if device.type == "cuda" else 0.0
     return {
         "model": model_name,
+        "recurrent_shape": shape_label,
         "copy_length": copy_length,
         "sequence_length": seq_len,
         "steps": args.steps,
@@ -155,6 +179,7 @@ def train_one(model_name: str, copy_length: int, args) -> dict:
         "test_copy_accuracy": test_acc,
         "params": params["total"],
         "memory_floats": mem["floats"],
+        "num_memory_tokens": cfg.num_memory_tokens if model_name == "recurrent" else "",
         "recurrent_memory_dim": cfg.recurrent_memory_dim or "",
         "training_time_sec": elapsed,
         "peak_gpu_memory_mb": peak_gpu_mb,
@@ -165,6 +190,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lengths", nargs="+", type=int, default=[8, 16, 32, 64])
     parser.add_argument("--models", nargs="+", default=["baseline", "per_token", "recurrent"])
+    parser.add_argument(
+        "--recurrent-shapes",
+        nargs="+",
+        type=parse_recurrent_shape,
+        default=None,
+        help="Optional recurrent shapes like 8x4096 16x2048. Only applies to recurrent.",
+    )
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--num-examples", type=int, default=5000)
     parser.add_argument("--test-examples", type=int, default=1000)
@@ -188,12 +220,14 @@ def main() -> None:
     rows = []
     for copy_length in args.lengths:
         for model_name in args.models:
-            rows.append(train_one(model_name, copy_length, args))
-            Path(args.csv_path).parent.mkdir(parents=True, exist_ok=True)
-            with Path(args.csv_path).open("w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-                writer.writeheader()
-                writer.writerows(rows)
+            recurrent_shapes = args.recurrent_shapes if model_name == "recurrent" else [None]
+            for recurrent_shape in recurrent_shapes:
+                rows.append(train_one(model_name, copy_length, args, recurrent_shape=recurrent_shape))
+                Path(args.csv_path).parent.mkdir(parents=True, exist_ok=True)
+                with Path(args.csv_path).open("w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                    writer.writeheader()
+                    writer.writerows(rows)
 
     print(f"\nwrote {args.csv_path}")
 

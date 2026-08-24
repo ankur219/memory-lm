@@ -24,14 +24,37 @@ import sys
 
 sys.path.insert(0, str(ROOT))
 
-from data.synthetic import KeyValueRetrievalDataset, collate_batch
+from data.synthetic import ANSWER, KeyValueRetrievalDataset, collate_batch
 from evaluation.efficiency import (
     matched_recurrent_dim_for_per_token,
     parameter_breakdown,
 )
-from evaluation.memory_tasks import token_accuracy
 from models import TransformerConfig
 from training.trainer import build_model, memory_budget_for_model
+
+
+@torch.no_grad()
+def answer_token_accuracy(model, dataloader, device: torch.device) -> float:
+    """Accuracy only at the position after <ANSWER>.
+
+    This stays a retrieval metric even when training uses dense next-token loss.
+    The target answer token is predicted from the hidden state at the <ANSWER>
+    position.
+    """
+
+    model.eval()
+    correct = 0
+    total = 0
+    for input_ids, targets in dataloader:
+        input_ids = input_ids.to(device)
+        targets = targets.to(device)
+        logits = model(input_ids)["logits"]
+        pred = logits.argmax(dim=-1)
+        answer_positions = input_ids == ANSWER
+        correct += int((pred[answer_positions] == targets[answer_positions]).sum().item())
+        total += int(answer_positions.sum().item())
+    model.train()
+    return correct / max(1, total)
 
 
 def make_config(model_name: str, num_pairs: int, vocab_size: int) -> TransformerConfig:
@@ -77,6 +100,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
         num_keys=args.num_keys,
         num_values=args.num_values,
         seed=seed,
+        supervise_all_tokens=args.supervise_all_tokens,
     )
     test_ds = KeyValueRetrievalDataset(
         num_examples=args.test_examples,
@@ -84,6 +108,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
         num_keys=args.num_keys,
         num_values=args.num_values,
         seed=seed + 1_000_000,
+        supervise_all_tokens=args.supervise_all_tokens,
     )
     val_size = max(1, int(0.1 * len(train_val)))
     train_size = len(train_val) - val_size
@@ -118,7 +143,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
             optimizer.step()
             last_loss = float(loss.item())
             if step == 1 or step % args.log_every == 0 or step == args.steps:
-                val_acc = token_accuracy(model, val_loader, device)
+                val_acc = answer_token_accuracy(model, val_loader, device)
                 print(
                     f"pairs {num_pairs:03d} | {model_name:9s} | "
                     f"step {step:04d} | loss {last_loss:.4f} | val_acc {val_acc:.3f}",
@@ -127,7 +152,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
             if step >= args.steps:
                 break
 
-    test_acc = token_accuracy(model, test_loader, device)
+    test_acc = answer_token_accuracy(model, test_loader, device)
     elapsed = time.time() - start
     seq_len = 2 * num_pairs + 5
     mem = memory_budget_for_model(model_name, cfg, sequence_length=seq_len)
@@ -138,6 +163,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
         "num_pairs": num_pairs,
         "sequence_length": seq_len,
         "steps": args.steps,
+        "supervise_all_tokens": args.supervise_all_tokens,
         "train_loss": last_loss,
         "test_answer_accuracy": test_acc,
         "params": params["total"],
@@ -162,6 +188,12 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--log-every", type=int, default=100)
+    parser.add_argument(
+        "--supervise-all-tokens",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use dense next-token loss while still reporting answer-token accuracy.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--csv-path", default="logs/kv_sweep.csv")

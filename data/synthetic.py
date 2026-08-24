@@ -5,8 +5,9 @@ look like:
 
     <BOS> key value key value ... <QUERY> key <ANSWER> value <EOS>
 
-The loss is only applied to the answer value token. This asks the model to
-store many exact associations and retrieve the requested one later.
+By default the loss is applied only to the answer value token. For easier
+optimization, callers can supervise all next-token positions while still
+evaluating answer-token accuracy separately.
 """
 
 from __future__ import annotations
@@ -55,8 +56,10 @@ class KeyValueRetrievalDataset(Dataset):
         num_keys: int = 64,
         num_values: int = 100,
         seed: int = 0,
+        supervise_all_tokens: bool = False,
     ):
         super().__init__()
+        self.supervise_all_tokens = supervise_all_tokens
         self.vocab = SyntheticVocab(num_keys=num_keys, num_values=num_values)
         self.examples = [
             self._make_example(random.Random(seed + i), num_pairs) for i in range(num_examples)
@@ -82,10 +85,16 @@ class KeyValueRetrievalDataset(Dataset):
     def __getitem__(self, idx: int):
         tokens, answer_index = self.examples[idx]
         input_ids = torch.tensor(tokens[:-1], dtype=torch.long)
-        targets = torch.full_like(input_ids, -100)
-        # Standard next-token LM alignment: logits at position answer_index - 1
-        # must predict the answer token at answer_index.
-        targets[answer_index - 1] = tokens[answer_index]
+        if self.supervise_all_tokens:
+            # Dense next-token supervision teaches the model the sequence
+            # grammar. Answer-only accuracy is still computed with a separate
+            # answer mask by the sweep script.
+            targets = torch.tensor(tokens[1:], dtype=torch.long)
+        else:
+            targets = torch.full_like(input_ids, -100)
+            # Standard next-token LM alignment: logits at position
+            # answer_index - 1 must predict the answer token at answer_index.
+            targets[answer_index - 1] = tokens[answer_index]
         return input_ids, targets
 
 
@@ -97,4 +106,3 @@ def collate_batch(batch):
         input_ids[i, : ids.numel()] = ids
         targets[i, : tgt.numel()] = tgt
     return input_ids, targets
-

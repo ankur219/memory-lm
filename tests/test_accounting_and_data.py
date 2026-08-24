@@ -1,6 +1,6 @@
 import pytest
 
-from data.synthetic import ANSWER, KeyValueRetrievalDataset
+from data.synthetic import ANSWER, KEY_OFFSET, KeyValueRetrievalDataset
 from data.text import BYTE_VOCAB_SIZE, ByteTokenizer, TiktokenTokenizer, build_lm_datasets
 from evaluation.efficiency import (
     matched_recurrent_dim_for_per_token,
@@ -20,6 +20,26 @@ def test_key_value_dataset_marks_only_answer_target():
     assert supervised.numel() == 1
     answer_prompt_pos = supervised.item()
     assert input_ids[answer_prompt_pos].item() == ANSWER
+
+
+def test_shifted_key_value_dataset_uses_one_offset_per_example():
+    ds = KeyValueRetrievalDataset(
+        num_examples=4,
+        num_pairs=5,
+        num_keys=16,
+        num_values=16,
+        seed=123,
+        value_mode="shifted",
+    )
+    input_ids, _ = ds[0]
+    value_offset = ds.vocab.value_offset
+    offsets = []
+    # Tokens are <BOS> key value key value ...
+    for pos in range(1, 1 + 2 * 5, 2):
+        key = int(input_ids[pos].item()) - KEY_OFFSET
+        value = int(input_ids[pos + 1].item()) - value_offset
+        offsets.append((value - key) % ds.vocab.num_values)
+    assert len(set(offsets)) == 1
 
 
 def test_parameter_breakdown_has_requested_buckets():

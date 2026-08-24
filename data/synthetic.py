@@ -60,8 +60,8 @@ class KeyValueRetrievalDataset(Dataset):
         value_mode: str = "random",
     ):
         super().__init__()
-        if value_mode not in {"random", "identity"}:
-            raise ValueError("value_mode must be 'random' or 'identity'")
+        if value_mode not in {"random", "identity", "shifted"}:
+            raise ValueError("value_mode must be 'random', 'identity', or 'shifted'")
         self.supervise_all_tokens = supervise_all_tokens
         self.value_mode = value_mode
         self.vocab = SyntheticVocab(num_keys=num_keys, num_values=num_values)
@@ -73,6 +73,9 @@ class KeyValueRetrievalDataset(Dataset):
         keys = rng.sample(range(self.vocab.num_keys), k=num_pairs)
         if self.value_mode == "identity":
             values = [key % self.vocab.num_values for key in keys]
+        elif self.value_mode == "shifted":
+            offset = rng.randrange(self.vocab.num_values)
+            values = [(key + offset) % self.vocab.num_values for key in keys]
         else:
             values = [rng.randrange(self.vocab.num_values) for _ in range(num_pairs)]
         pairs: Dict[int, int] = dict(zip(keys, values))

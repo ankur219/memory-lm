@@ -209,7 +209,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-keys", type=int, default=128)
     parser.add_argument("--num-values", type=int, default=100)
-    parser.add_argument("--value-mode", choices=["random", "identity"], default="random")
+    parser.add_argument("--value-mode", choices=["random", "identity", "shifted"], default="random")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)

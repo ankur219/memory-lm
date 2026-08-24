@@ -196,6 +196,60 @@ collapse. More slots help slightly at length 32, but all shapes remain near
 chance at length 64. This suggests the current recurrent update loses exact
 sequence detail, not merely that it has too few slots.
 
+### Last-Token Recurrent Update
+
+This variant updates recurrent memory from the last token states in each chunk
+instead of mean pooling or cross-attention over the full chunk.
+
+Copy command:
+
+```bash
+python experiments/run_copy_sweep.py \
+  --lengths 16 32 64 \
+  --models recurrent \
+  --recurrent-update-style last_tokens \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --csv-path logs/copy_recurrent_last_tokens.csv
+```
+
+Needle command:
+
+```bash
+python experiments/run_needle_sweep.py \
+  --gaps 16 32 64 \
+  --models recurrent \
+  --recurrent-update-style last_tokens \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --answer-loss-weight 10 \
+  --csv-path logs/needle_recurrent_last_tokens.csv
+```
+
+Copy result:
+
+| Copy Length | Cross-attn Recurrent | Last-token Recurrent |
+|---:|---:|---:|
+| 16 | 0.942 | 0.942 |
+| 32 | 0.045 | 0.046 |
+| 64 | 0.030 | 0.031 |
+
+Needle result:
+
+| Gap Length | Cross-attn Recurrent | Last-token Recurrent |
+|---:|---:|---:|
+| 16 | 1.000 | 1.000 |
+| 32 | 0.016 | 0.016 |
+| 64 | 0.015 | 0.018 |
+
+Interpretation: the last-token update does not fix recurrent collapse. This
+suggests the failure is not only due to mean pooling or cross-attention update
+details.
+
 ## Synthetic Needle
 
 The needle task tests recalling one exact value after filler:
@@ -239,11 +293,13 @@ The current evidence supports a cautious statement:
 > Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and generally stronger random key-value retrieval than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
 
 Copy and needle are the cleanest synthetic evidence so far: per-token memory
-preserves exact details far better than the current recurrent memory design. The
-KV probes also show that task design matters: identity retrieval is solved, but
-shifted and random binding remain difficult for these small models.
+preserves exact details far better than the current recurrent memory design.
+Changing recurrent slot allocation and adding a last-token update did not fix
+the collapse. The KV probes also show that task design matters: identity
+retrieval is solved, but shifted and random binding remain difficult for these
+small models.
 
 Next useful experiments:
 
-1. Test stronger recurrent update policies.
-2. Add a second real-text dataset.
+1. Add a second real-text dataset.
+2. Explore more substantial recurrent redesigns, not just update variants.

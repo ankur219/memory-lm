@@ -56,7 +56,12 @@ def weighted_loss(logits, input_ids, targets, answer_weight: float):
     return (per_token_loss * weights).sum() / weights.sum().clamp_min(1.0)
 
 
-def make_config(model_name: str, sequence_length: int, vocab_size: int) -> TransformerConfig:
+def make_config(
+    model_name: str,
+    sequence_length: int,
+    vocab_size: int,
+    recurrent_update_style: str = "cross_attention",
+) -> TransformerConfig:
     cfg = TransformerConfig(
         vocab_size=vocab_size,
         hidden_size=128,
@@ -71,7 +76,7 @@ def make_config(model_name: str, sequence_length: int, vocab_size: int) -> Trans
         recurrent_update_rank=4,
         recurrent_compressed_attention=True,
         recurrent_learned_initial=False,
-        recurrent_update_style="cross_attention",
+        recurrent_update_style=recurrent_update_style,
         chunk_size=32,
     )
     if model_name == "recurrent":
@@ -121,7 +126,12 @@ def train_one(model_name: str, gap_length: int, args) -> dict:
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
 
     sequence_length = train_val[0][0].numel()
-    cfg = make_config(model_name, sequence_length, train_val.vocab_size)
+    cfg = make_config(
+        model_name,
+        sequence_length,
+        train_val.vocab_size,
+        recurrent_update_style=args.recurrent_update_style,
+    )
     model = build_model(model_name, cfg).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
@@ -159,6 +169,7 @@ def train_one(model_name: str, gap_length: int, args) -> dict:
     peak_gpu_mb = torch.cuda.max_memory_allocated() / (1024**2) if device.type == "cuda" else 0.0
     return {
         "model": model_name,
+        "recurrent_update_style": cfg.recurrent_update_style if model_name == "recurrent" else "",
         "gap_length": gap_length,
         "sequence_length": sequence_length,
         "steps": args.steps,
@@ -185,6 +196,11 @@ def main() -> None:
     parser.add_argument("--prefix-length", type=int, default=8)
     parser.add_argument("--vocab-tokens", type=int, default=64)
     parser.add_argument("--num-values", type=int, default=64)
+    parser.add_argument(
+        "--recurrent-update-style",
+        choices=["mean_gru", "cross_attention", "last_tokens"],
+        default="cross_attention",
+    )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)

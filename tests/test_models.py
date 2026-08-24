@@ -119,3 +119,19 @@ def test_recurrent_cross_attention_no_collapse():
     diag = torch.eye(4, device=cos_sim_matrix.device)
     off_diag_sim = cos_sim_matrix * (1.0 - diag)
     assert (off_diag_sim < 0.99).any(), f"Memory slots collapsed: {cos_sim_matrix}"
+
+
+def test_recurrent_last_tokens_update_gets_gradients():
+    cfg = tiny_config(
+        num_memory_tokens=4,
+        recurrent_memory_dim=48,
+        recurrent_update_style="last_tokens",
+        chunk_size=4,
+    )
+    model = RecurrentMemoryTransformer(cfg)
+    input_ids = torch.randint(0, 64, (2, 12))
+    targets = torch.randint(0, 64, (2, 12))
+    loss = model(input_ids, targets=targets)["loss"]
+    loss.backward()
+    assert model.candidate_up.weight.grad is not None
+    assert model.candidate_up.weight.grad.abs().sum().item() > 0

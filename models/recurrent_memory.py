@@ -139,6 +139,21 @@ class RecurrentMemoryTransformer(nn.Module):
             candidate = torch.tanh(candidate_up(summary))  # [batch, num_memory_tokens, recurrent_memory_dim]
             gate = torch.sigmoid(gate_up(summary))  # [batch, num_memory_tokens, recurrent_memory_dim]
             memory_out = mem_state * (1.0 - gate) + candidate * gate
+        elif self.config.recurrent_update_style == "last_tokens":
+            # Ordered recent-token update. Instead of compressing the whole
+            # chunk into one mean vector, each memory slot receives one of the
+            # last num_memory_tokens token states. This tests whether recurrent
+            # memory fails because the update destroys order/detail too early.
+            n = self.config.num_memory_tokens
+            if token_out.size(1) >= n:
+                selected = token_out[:, -n:, :]
+            else:
+                pad = token_out.new_zeros(token_out.size(0), n - token_out.size(1), token_out.size(2))
+                selected = torch.cat([pad, token_out], dim=1)
+            summary = summary_down(selected)  # [batch, num_memory_tokens, update_rank]
+            candidate = torch.tanh(candidate_up(summary))
+            gate = torch.sigmoid(gate_up(summary))
+            memory_out = mem_state * (1.0 - gate) + candidate * gate
         else:
             # Classic mean pooled update (original mean_gru)
             chunk_summary = token_out.mean(dim=1)  # [batch, hidden_size]

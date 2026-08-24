@@ -17,7 +17,7 @@ from training.trainer import build_model, build_real_lm_datasets_from_config, me
 from models import TransformerConfig
 
 
-CONFIGS = ["real_baseline.yaml", "real_per_token.yaml", "real_recurrent.yaml"]
+DEFAULT_CONFIGS = ["real_baseline.yaml", "real_per_token.yaml", "real_recurrent.yaml"]
 
 
 def load_description(config_path: Path) -> dict:
@@ -84,19 +84,27 @@ def print_description(desc: dict) -> None:
 
 
 if __name__ == "__main__":
-    descriptions = [load_description(Path("configs") / name) for name in CONFIGS]
+    config_args = sys.argv[1:] or DEFAULT_CONFIGS
+    descriptions = [
+        load_description(Path(arg) if "/" in arg else Path("configs") / arg)
+        for arg in config_args
+    ]
     for desc in descriptions:
         print_description(desc)
 
-    per_token = next(d for d in descriptions if d["model_name"] == "per_token")
-    recurrent = next(d for d in descriptions if d["model_name"] == "recurrent")
-    print("\nmatched_many_small_vs_few_rich")
-    print(f"  params_equal: {per_token['params'] == recurrent['params']}")
-    print(f"  per_token_params: {per_token['params']:,}")
-    print(f"  recurrent_params: {recurrent['params']:,}")
-    print(
-        "  memory_equal: "
-        f"{per_token['persistent_memory']['floats'] == recurrent['persistent_memory']['floats']}"
-    )
-    print(f"  per_token_memory_floats: {per_token['persistent_memory']['floats']:,}")
-    print(f"  recurrent_memory_floats: {recurrent['persistent_memory']['floats']:,}")
+    per_tokens = [d for d in descriptions if d["model_name"] == "per_token"]
+    recurrents = [d for d in descriptions if d["model_name"] == "recurrent"]
+    if per_tokens and recurrents:
+        per_token = per_tokens[0]
+        print("\nmatched_many_small_vs_few_rich")
+        for recurrent in recurrents:
+            print(f"  recurrent_config: {recurrent['config_name']}")
+            print(f"  params_equal: {per_token['params'] == recurrent['params']}")
+            print(f"  per_token_params: {per_token['params']:,}")
+            print(f"  recurrent_params: {recurrent['params']:,}")
+            print(
+                "  memory_equal: "
+                f"{per_token['persistent_memory']['floats'] == recurrent['persistent_memory']['floats']}"
+            )
+            print(f"  per_token_memory_floats: {per_token['persistent_memory']['floats']:,}")
+            print(f"  recurrent_memory_floats: {recurrent['persistent_memory']['floats']:,}")

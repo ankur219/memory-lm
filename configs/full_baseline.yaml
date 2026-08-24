@@ -6,15 +6,16 @@ batch_size: 128
 learning_rate: 0.0005
 weight_decay: 0.01
 grad_clip: 1.0
-max_steps: 28931
-num_epochs: 5
+max_steps:
+num_epochs: 1
 eval_every: 500
 eval_max_batches: 100
 final_eval_max_batches:
-val_fraction: 0.05
 block_stride:
 log_path: logs/full_baseline.jsonl
 csv_path: logs/full_baseline.csv
+checkpoint_dir: checkpoints/full_baseline
+save_every: 5000
 tokenizer:
   kind: tiktoken
   encoding: gpt2
@@ -23,6 +24,16 @@ data:
   source: tinystories
   split: train
   cache_dir: data/hf_cache
+  cache_tokens: true
+  token_cache_dir: data/token_cache
+  offline: true
+  max_examples: null
+  max_chars: null
+validation_data:
+  source: tinystories
+  split: validation
+  cache_dir: data/hf_cache
+  token_cache_dir: data/token_cache
   offline: true
   max_examples: null
   max_chars: null

@@ -15,6 +15,6 @@ if __name__ == "__main__":
         "full_recurrent_cross_attn.yaml",
     ]
     for config_name in configs:
-        print(f"\n=== {config_name} ===")
+        print(f"\n=== {config_name} ===", flush=True)
         with Path("configs", config_name).open("r", encoding="utf-8") as f:
             train_language_model(yaml.safe_load(f))

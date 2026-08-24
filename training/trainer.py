@@ -60,7 +60,7 @@ def memory_budget_for_model(model_name: str, config: TransformerConfig, sequence
     if model_name == "per_token":
         return per_token_memory_budget(config, sequence_length)
     if model_name == "recurrent":
-        return recurrent_memory_budget(config)
+        return recurrent_memory_budget(config, per_layer_memory=config.per_layer_memory)
     raise ValueError(model_name)
 
 
@@ -188,7 +188,12 @@ def train_synthetic(config: Dict) -> Dict:
 
     requested_device = config.get("device", "auto")
     if requested_device == "auto":
-        requested_device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            requested_device = "cuda"
+        elif torch.backends.mps.is_available():
+            requested_device = "mps"
+        else:
+            requested_device = "cpu"
     device = torch.device(requested_device)
     dataset_cfg = config.get("dataset", {})
     dataset = KeyValueRetrievalDataset(**dataset_cfg)
@@ -355,7 +360,12 @@ def train_language_model(config: Dict) -> Dict:
     torch.manual_seed(seed)
     requested_device = config.get("device", "auto")
     if requested_device == "auto":
-        requested_device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            requested_device = "cuda"
+        elif torch.backends.mps.is_available():
+            requested_device = "mps"
+        else:
+            requested_device = "cpu"
     device = torch.device(requested_device)
 
     train_ds, val_ds, tokenizer = build_real_lm_datasets_from_config(config)

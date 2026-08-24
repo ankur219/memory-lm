@@ -33,6 +33,8 @@ class TransformerConfig:
     recurrent_update_rank: int = 4
     recurrent_compressed_attention: bool = True
     recurrent_learned_initial: bool = False
+    per_layer_memory: bool = False
+    recurrent_update_style: str = "mean_gru"
     param_padding: int = 0
     chunk_size: int = 128
 

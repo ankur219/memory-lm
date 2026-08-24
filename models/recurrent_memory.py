@@ -8,6 +8,7 @@ memory for the next chunk.
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 import torch
@@ -25,20 +26,59 @@ class RecurrentMemoryTransformer(nn.Module):
         self.recurrent_memory_dim = config.recurrent_memory_dim or config.hidden_size
         self.update_rank = config.recurrent_update_rank
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
-        initial_memory = torch.zeros(config.num_memory_tokens, self.recurrent_memory_dim)
+        
+        if config.per_layer_memory:
+            initial_memory = torch.zeros(config.num_layers, config.num_memory_tokens, self.recurrent_memory_dim)
+        else:
+            initial_memory = torch.zeros(config.num_memory_tokens, self.recurrent_memory_dim)
+            
         if config.recurrent_learned_initial:
             self.initial_memory = nn.Parameter(initial_memory)
         else:
             self.register_buffer("initial_memory", initial_memory, persistent=True)
 
-        # Low-rank rich-memory bridge. The persistent slots can be very wide
-        # for memory-budget matching, but the learned updater stays small enough
-        # to keep total parameters close to the many-small model.
-        self.memory_down = nn.Linear(self.recurrent_memory_dim, self.update_rank, bias=False)
-        self.memory_up = nn.Linear(self.update_rank, config.hidden_size, bias=False)
-        self.summary_down = nn.Linear(config.hidden_size, self.update_rank, bias=False)
-        self.candidate_up = nn.Linear(self.update_rank, self.recurrent_memory_dim, bias=False)
-        self.gate_up = nn.Linear(self.update_rank, self.recurrent_memory_dim, bias=False)
+        # Low-rank rich-memory bridge and learned updater modules.
+        if config.per_layer_memory:
+            self.memory_down = nn.ModuleList([
+                nn.Linear(self.recurrent_memory_dim, self.update_rank, bias=False)
+                for _ in range(config.num_layers)
+            ])
+            self.memory_up = nn.ModuleList([
+                nn.Linear(self.update_rank, config.hidden_size, bias=False)
+                for _ in range(config.num_layers)
+            ])
+            if config.recurrent_update_style == "cross_attention":
+                self.key_proj = nn.ModuleList([
+                    nn.Linear(config.hidden_size, self.update_rank, bias=False)
+                    for _ in range(config.num_layers)
+                ])
+                self.value_proj = nn.ModuleList([
+                    nn.Linear(config.hidden_size, self.update_rank, bias=False)
+                    for _ in range(config.num_layers)
+                ])
+            else:
+                self.summary_down = nn.ModuleList([
+                    nn.Linear(config.hidden_size, self.update_rank, bias=False)
+                    for _ in range(config.num_layers)
+                ])
+            self.candidate_up = nn.ModuleList([
+                nn.Linear(self.update_rank, self.recurrent_memory_dim, bias=False)
+                for _ in range(config.num_layers)
+            ])
+            self.gate_up = nn.ModuleList([
+                nn.Linear(self.update_rank, self.recurrent_memory_dim, bias=False)
+                for _ in range(config.num_layers)
+            ])
+        else:
+            self.memory_down = nn.Linear(self.recurrent_memory_dim, self.update_rank, bias=False)
+            self.memory_up = nn.Linear(self.update_rank, config.hidden_size, bias=False)
+            if config.recurrent_update_style == "cross_attention":
+                self.key_proj = nn.Linear(config.hidden_size, self.update_rank, bias=False)
+                self.value_proj = nn.Linear(config.hidden_size, self.update_rank, bias=False)
+            else:
+                self.summary_down = nn.Linear(config.hidden_size, self.update_rank, bias=False)
+            self.candidate_up = nn.Linear(self.update_rank, self.recurrent_memory_dim, bias=False)
+            self.gate_up = nn.Linear(self.update_rank, self.recurrent_memory_dim, bias=False)
 
         block_cls = PerTokenBlock if config.recurrent_compressed_attention else TransformerBlock
         self.layers = nn.ModuleList([block_cls(config) for _ in range(config.num_layers)])
@@ -63,49 +103,91 @@ class RecurrentMemoryTransformer(nn.Module):
         if isinstance(module, (nn.Linear, nn.Embedding)):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
+    def _update_memory_state(self, mem_state, token_out, layer_idx=None):
+        # mem_state: [batch, num_memory_tokens, recurrent_memory_dim]
+        # token_out: [batch, chunk_len, hidden_size]
+        if self.config.per_layer_memory:
+            assert layer_idx is not None
+            mem_down = self.memory_down[layer_idx]
+            candidate_up = self.candidate_up[layer_idx]
+            gate_up = self.gate_up[layer_idx]
+            if self.config.recurrent_update_style == "cross_attention":
+                key_proj = self.key_proj[layer_idx]
+                value_proj = self.value_proj[layer_idx]
+            else:
+                summary_down = self.summary_down[layer_idx]
+        else:
+            mem_down = self.memory_down
+            candidate_up = self.candidate_up
+            gate_up = self.gate_up
+            if self.config.recurrent_update_style == "cross_attention":
+                key_proj = self.key_proj
+                value_proj = self.value_proj
+            else:
+                summary_down = self.summary_down
+
+        if self.config.recurrent_update_style == "cross_attention":
+            # Slot-specific attention
+            q = mem_down(mem_state)  # [batch, num_memory_tokens, update_rank]
+            k = key_proj(token_out)  # [batch, chunk_len, update_rank]
+            v = value_proj(token_out)  # [batch, chunk_len, update_rank]
+            
+            scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.update_rank)  # [batch, num_memory_tokens, chunk_len]
+            attn = F.softmax(scores, dim=-1)
+            summary = torch.matmul(attn, v)  # [batch, num_memory_tokens, update_rank]
+            
+            candidate = torch.tanh(candidate_up(summary))  # [batch, num_memory_tokens, recurrent_memory_dim]
+            gate = torch.sigmoid(gate_up(summary))  # [batch, num_memory_tokens, recurrent_memory_dim]
+            memory_out = mem_state * (1.0 - gate) + candidate * gate
+        else:
+            # Classic mean pooled update (original mean_gru)
+            chunk_summary = token_out.mean(dim=1)  # [batch, hidden_size]
+            summary = summary_down(chunk_summary)  # [batch, update_rank]
+            candidate = torch.tanh(candidate_up(summary))[:, None, :]  # [batch, 1, recurrent_memory_dim]
+            gate = torch.sigmoid(gate_up(summary))[:, None, :]  # [batch, 1, recurrent_memory_dim]
+            memory_out = mem_state * (1.0 - gate) + candidate.expand_as(mem_state) * gate
+            
+        return memory_out
+
     def _run_chunk(self, token_embeddings: torch.Tensor, memory: torch.Tensor):
-        """Run one chunk plus memory through all layers.
-
-        Persistent memory is stored as [batch, memory_tokens, recurrent_memory_dim].
-        Before attention, each rich memory slot is projected down to a normal
-        hidden_size prefix state through a low-rank bridge and prepended to the
-        chunk. Text tokens can read those prefix states plus previous tokens in
-        the chunk.
-
-        A subtle causal point: with a normal causal mask, the prepended memory
-        positions cannot read the later text positions, so their Transformer
-        outputs are not a valid chunk summary. Instead, the memory is read-only
-        inside the chunk, then updated afterward from a pooled summary of the
-        token outputs. This keeps token logits causal while still giving the
-        recurrent state a path to absorb the just-processed chunk.
-
-        We intentionally do not detach memory_out here. Future chunk losses must
-        be able to train the memory update parameters. Detaching would make the
-        recurrent updater nearly decorative.
-        """
-
-        memory_prefix = self.memory_up(self.memory_down(memory))
-        x = torch.cat([memory_prefix, token_embeddings], dim=1)
         caches = []
-        for layer in self.layers:
-            x, cache = layer(x, self.rope_cos, self.rope_sin)
-            caches.append(cache)
-        token_out = x[:, self.config.num_memory_tokens :, :]
-        chunk_summary = token_out.mean(dim=1)
+        if self.config.per_layer_memory:
+            x = token_embeddings
+            token_outs_by_layer = []
+            for l, layer in enumerate(self.layers):
+                mem_l = memory[:, l]  # [batch, num_memory_tokens, recurrent_memory_dim]
+                memory_prefix_l = self.memory_up[l](self.memory_down[l](mem_l))  # [batch, num_memory_tokens, hidden_size]
+                x = torch.cat([memory_prefix_l, x], dim=1)
+                x, cache = layer(x, self.rope_cos, self.rope_sin)
+                
+                # Slice out memory prefix output and text output
+                x = x[:, self.config.num_memory_tokens:, :]
+                token_outs_by_layer.append(x)
+                caches.append(cache)
+                
+            token_out = x
+            updated_memories = []
+            for l in range(self.config.num_layers):
+                updated_mem_l = self._update_memory_state(memory[:, l], token_outs_by_layer[l], layer_idx=l)
+                updated_memories.append(updated_mem_l)
+            memory_out = torch.stack(updated_memories, dim=1)
+        else:
+            memory_prefix = self.memory_up(self.memory_down(memory))
+            x = torch.cat([memory_prefix, token_embeddings], dim=1)
+            for layer in self.layers:
+                x, cache = layer(x, self.rope_cos, self.rope_sin)
+                caches.append(cache)
+            token_out = x[:, self.config.num_memory_tokens:, :]
+            memory_out = self._update_memory_state(memory, token_out)
 
-        # Update rich persistent slots in recurrent_memory_dim space through the
-        # same low-rank bottleneck. Parameter count is controlled by
-        # recurrent_update_rank, while stored memory width remains fixed by the
-        # memory-budget equation.
-        summary = self.summary_down(chunk_summary)
-        candidate = torch.tanh(self.candidate_up(summary))[:, None, :]
-        gate = torch.sigmoid(self.gate_up(summary))[:, None, :]
-        memory_out = memory * (1.0 - gate) + candidate.expand_as(memory) * gate
         return token_out, memory_out, caches
 
     def forward(self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None):
         batch, seq_len = input_ids.shape
-        memory = self.initial_memory.unsqueeze(0).expand(batch, -1, -1)
+        if self.config.per_layer_memory:
+            memory = self.initial_memory.unsqueeze(0).expand(batch, -1, -1, -1)
+        else:
+            memory = self.initial_memory.unsqueeze(0).expand(batch, -1, -1)
         outputs = []
         all_caches = []
 

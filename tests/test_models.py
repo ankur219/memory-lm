@@ -92,3 +92,30 @@ def test_parameter_padding_gets_gradients_when_enabled():
     loss.backward()
     assert model.param_padding.grad is not None
     assert model.param_padding.grad.abs().sum().item() > 0
+
+
+def test_recurrent_layerwise_memory_shape():
+    cfg = tiny_config(num_memory_tokens=5, per_layer_memory=True, recurrent_memory_dim=48)
+    model = RecurrentMemoryTransformer(cfg)
+    out = model(torch.randint(0, 64, (2, 11)))
+    assert out["memory"].shape == (2, 2, 5, 48)
+
+
+def test_recurrent_cross_attention_no_collapse():
+    cfg = tiny_config(
+        num_memory_tokens=4,
+        recurrent_memory_dim=16,
+        recurrent_update_style="cross_attention",
+        chunk_size=4,
+        recurrent_learned_initial=True,
+    )
+    model = RecurrentMemoryTransformer(cfg)
+    input_ids = torch.randint(0, 64, (2, 12))
+    out = model(input_ids)
+    final_mem = out["memory"]
+    first_batch_mem = final_mem[0]
+    norm_mem = torch.nn.functional.normalize(first_batch_mem, dim=-1)
+    cos_sim_matrix = torch.mm(norm_mem, norm_mem.T)
+    diag = torch.eye(4, device=cos_sim_matrix.device)
+    off_diag_sim = cos_sim_matrix * (1.0 - diag)
+    assert (off_diag_sim < 0.99).any(), f"Memory slots collapsed: {cos_sim_matrix}"

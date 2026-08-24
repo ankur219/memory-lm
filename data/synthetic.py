@@ -25,6 +25,7 @@ BOS = 1
 EOS = 2
 QUERY = 3
 ANSWER = 4
+COPY = 5
 KEY_OFFSET = 10
 
 
@@ -105,6 +106,56 @@ class KeyValueRetrievalDataset(Dataset):
             # Standard next-token LM alignment: logits at position
             # answer_index - 1 must predict the answer token at answer_index.
             targets[answer_index - 1] = tokens[answer_index]
+        return input_ids, targets
+
+
+class CopyDataset(Dataset):
+    """Exact copying task.
+
+    Each example is:
+
+        <BOS> random_tokens <COPY> random_tokens <EOS>
+
+    Training can supervise either every next-token position or only the copied
+    output span. Evaluation should measure only the copied span.
+    """
+
+    def __init__(
+        self,
+        num_examples: int = 1000,
+        copy_length: int = 16,
+        vocab_tokens: int = 64,
+        seed: int = 0,
+        supervise_all_tokens: bool = True,
+    ):
+        super().__init__()
+        self.copy_length = int(copy_length)
+        self.vocab_tokens = int(vocab_tokens)
+        self.supervise_all_tokens = supervise_all_tokens
+        self.vocab_size = KEY_OFFSET + self.vocab_tokens
+        self.examples = [
+            self._make_example(random.Random(seed + i)) for i in range(num_examples)
+        ]
+
+    def _make_example(self, rng: random.Random) -> List[int]:
+        payload = [KEY_OFFSET + rng.randrange(self.vocab_tokens) for _ in range(self.copy_length)]
+        return [BOS] + payload + [COPY] + payload + [EOS]
+
+    def __len__(self) -> int:
+        return len(self.examples)
+
+    def __getitem__(self, idx: int):
+        tokens = self.examples[idx]
+        input_ids = torch.tensor(tokens[:-1], dtype=torch.long)
+        if self.supervise_all_tokens:
+            targets = torch.tensor(tokens[1:], dtype=torch.long)
+        else:
+            targets = torch.full_like(input_ids, -100)
+            copy_start = 1 + self.copy_length
+            targets[copy_start : copy_start + self.copy_length] = torch.tensor(
+                tokens[copy_start + 1 : copy_start + 1 + self.copy_length],
+                dtype=torch.long,
+            )
         return input_ids, targets
 
 

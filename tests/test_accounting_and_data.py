@@ -1,6 +1,6 @@
 import pytest
 
-from data.synthetic import ANSWER, KEY_OFFSET, KeyValueRetrievalDataset
+from data.synthetic import ANSWER, COPY, KEY_OFFSET, CopyDataset, KeyValueRetrievalDataset
 from data.text import BYTE_VOCAB_SIZE, ByteTokenizer, TiktokenTokenizer, build_lm_datasets
 from evaluation.efficiency import (
     matched_recurrent_dim_for_per_token,
@@ -40,6 +40,15 @@ def test_shifted_key_value_dataset_uses_one_offset_per_example():
         value = int(input_ids[pos + 1].item()) - value_offset
         offsets.append((value - key) % ds.vocab.num_values)
     assert len(set(offsets)) == 1
+
+
+def test_copy_dataset_marks_copy_span_when_sparse():
+    ds = CopyDataset(num_examples=4, copy_length=6, seed=123, supervise_all_tokens=False)
+    input_ids, targets = ds[0]
+    marker_pos = (input_ids == COPY).nonzero().flatten().item()
+    supervised = (targets != -100).nonzero().flatten()
+    assert supervised.numel() == 6
+    assert supervised[0].item() == marker_pos
 
 
 def test_parameter_breakdown_has_requested_buckets():

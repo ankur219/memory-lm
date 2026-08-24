@@ -1,0 +1,202 @@
+"""Run an exact-copy synthetic memory sweep."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import sys
+import time
+from pathlib import Path
+
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, random_split
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from data.synthetic import COPY, CopyDataset, collate_batch
+from evaluation.efficiency import matched_recurrent_dim_for_per_token, parameter_breakdown
+from models import TransformerConfig
+from training.trainer import build_model, memory_budget_for_model
+
+
+@torch.no_grad()
+def copy_accuracy(model, dataloader, device: torch.device) -> float:
+    """Accuracy only on tokens generated after the <COPY> marker."""
+
+    model.eval()
+    correct = 0
+    total = 0
+    for input_ids, targets in dataloader:
+        input_ids = input_ids.to(device)
+        targets = targets.to(device)
+        logits = model(input_ids)["logits"]
+        pred = logits.argmax(dim=-1)
+        copy_marker = input_ids == COPY
+        after_copy = copy_marker.cumsum(dim=1) > 0
+        copy_targets = after_copy & (targets != -100)
+        correct += int((pred[copy_targets] == targets[copy_targets]).sum().item())
+        total += int(copy_targets.sum().item())
+    model.train()
+    return correct / max(1, total)
+
+
+def make_config(model_name: str, copy_length: int, vocab_size: int) -> TransformerConfig:
+    seq_len = 2 * copy_length + 3
+    context_length = max(32, seq_len)
+    cfg = TransformerConfig(
+        vocab_size=vocab_size,
+        hidden_size=128,
+        num_layers=2,
+        num_heads=4,
+        context_length=context_length,
+        mlp_ratio=4.0,
+        dropout=0.0,
+        tie_embeddings=True,
+        memory_dim=64,
+        num_memory_tokens=8,
+        recurrent_update_rank=4,
+        recurrent_compressed_attention=True,
+        recurrent_learned_initial=False,
+        recurrent_update_style="cross_attention",
+        chunk_size=32,
+    )
+    if model_name == "recurrent":
+        cfg.recurrent_memory_dim = matched_recurrent_dim_for_per_token(
+            cfg,
+            sequence_length=seq_len,
+            num_memory_tokens=cfg.num_memory_tokens,
+        )
+    return cfg
+
+
+def train_one(model_name: str, copy_length: int, args) -> dict:
+    seed = args.seed + copy_length * 100
+    torch.manual_seed(seed)
+    requested_device = args.device
+    if requested_device == "auto":
+        requested_device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(requested_device)
+
+    train_val = CopyDataset(
+        num_examples=args.num_examples,
+        copy_length=copy_length,
+        vocab_tokens=args.vocab_tokens,
+        seed=seed,
+        supervise_all_tokens=args.supervise_all_tokens,
+    )
+    test_ds = CopyDataset(
+        num_examples=args.test_examples,
+        copy_length=copy_length,
+        vocab_tokens=args.vocab_tokens,
+        seed=seed + 1_000_000,
+        supervise_all_tokens=args.supervise_all_tokens,
+    )
+    val_size = max(1, int(0.1 * len(train_val)))
+    train_size = len(train_val) - val_size
+    train_ds, val_ds = random_split(
+        train_val,
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(seed),
+    )
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=collate_batch)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
+    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
+
+    cfg = make_config(model_name, copy_length, train_val.vocab_size)
+    model = build_model(model_name, cfg).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats()
+    start = time.time()
+    step = 0
+    last_loss = None
+    while step < args.steps:
+        for input_ids, targets in train_loader:
+            step += 1
+            input_ids = input_ids.to(device)
+            targets = targets.to(device)
+            logits = model(input_ids)["logits"]
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
+                ignore_index=-100,
+            )
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+            optimizer.step()
+            last_loss = float(loss.item())
+            if step == 1 or step % args.log_every == 0 or step == args.steps:
+                val_acc = copy_accuracy(model, val_loader, device)
+                print(
+                    f"length {copy_length:03d} | {model_name:9s} | "
+                    f"step {step:04d} | loss {last_loss:.4f} | copy_acc {val_acc:.3f}",
+                    flush=True,
+                )
+            if step >= args.steps:
+                break
+
+    test_acc = copy_accuracy(model, test_loader, device)
+    elapsed = time.time() - start
+    seq_len = 2 * copy_length + 3
+    mem = memory_budget_for_model(model_name, cfg, sequence_length=seq_len)
+    params = parameter_breakdown(model)
+    peak_gpu_mb = torch.cuda.max_memory_allocated() / (1024**2) if device.type == "cuda" else 0.0
+    return {
+        "model": model_name,
+        "copy_length": copy_length,
+        "sequence_length": seq_len,
+        "steps": args.steps,
+        "supervise_all_tokens": args.supervise_all_tokens,
+        "train_loss": last_loss,
+        "test_copy_accuracy": test_acc,
+        "params": params["total"],
+        "memory_floats": mem["floats"],
+        "recurrent_memory_dim": cfg.recurrent_memory_dim or "",
+        "training_time_sec": elapsed,
+        "peak_gpu_memory_mb": peak_gpu_mb,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lengths", nargs="+", type=int, default=[8, 16, 32, 64])
+    parser.add_argument("--models", nargs="+", default=["baseline", "per_token", "recurrent"])
+    parser.add_argument("--steps", type=int, default=300)
+    parser.add_argument("--num-examples", type=int, default=5000)
+    parser.add_argument("--test-examples", type=int, default=1000)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--vocab-tokens", type=int, default=64)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight-decay", type=float, default=0.01)
+    parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--log-every", type=int, default=100)
+    parser.add_argument(
+        "--supervise-all-tokens",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use dense next-token loss while reporting copy-span accuracy.",
+    )
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--device", default="auto")
+    parser.add_argument("--csv-path", default="logs/copy_sweep.csv")
+    args = parser.parse_args()
+
+    rows = []
+    for copy_length in args.lengths:
+        for model_name in args.models:
+            rows.append(train_one(model_name, copy_length, args))
+            Path(args.csv_path).parent.mkdir(parents=True, exist_ok=True)
+            with Path(args.csv_path).open("w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(rows)
+
+    print(f"\nwrote {args.csv_path}")
+
+
+if __name__ == "__main__":
+    main()

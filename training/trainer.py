@@ -16,7 +16,9 @@ from data.synthetic import KeyValueRetrievalDataset, collate_batch
 from data.text import (
     build_lm_datasets,
     build_lm_datasets_from_texts,
+    build_hf_memmap_datasets,
     build_tinystories_memmap_datasets,
+    load_hf_text,
     load_text_file,
     load_tinystories_text,
     tokenizer_metadata,
@@ -292,7 +294,18 @@ def load_real_text_from_config(config: Dict) -> str:
         )
     if source == "text_file":
         return load_text_file(data_cfg["path"], max_chars=max_chars)
-    raise ValueError("data.source must be 'tinystories' or 'text_file'")
+    if source == "hf_text":
+        return load_hf_text(
+            dataset_name=data_cfg["dataset_name"],
+            dataset_config=data_cfg.get("dataset_config"),
+            split=data_cfg.get("split", "train"),
+            text_field=data_cfg.get("text_field", "text"),
+            max_examples=data_cfg.get("max_examples"),
+            max_chars=max_chars,
+            cache_dir=data_cfg.get("cache_dir", "data/hf_cache"),
+            offline=bool(data_cfg.get("offline", False)),
+        )
+    raise ValueError("data.source must be 'tinystories', 'hf_text', or 'text_file'")
 
 
 def load_validation_text_from_config(config: Dict) -> Optional[str]:
@@ -311,7 +324,18 @@ def load_validation_text_from_config(config: Dict) -> Optional[str]:
         )
     if source == "text_file":
         return load_text_file(val_cfg["path"], max_chars=max_chars)
-    raise ValueError("validation_data.source must be 'tinystories' or 'text_file'")
+    if source == "hf_text":
+        return load_hf_text(
+            dataset_name=val_cfg["dataset_name"],
+            dataset_config=val_cfg.get("dataset_config"),
+            split=val_cfg.get("split", "validation"),
+            text_field=val_cfg.get("text_field", "text"),
+            max_examples=val_cfg.get("max_examples"),
+            max_chars=max_chars,
+            cache_dir=val_cfg.get("cache_dir", "data/hf_cache"),
+            offline=bool(val_cfg.get("offline", config.get("data", {}).get("offline", False))),
+        )
+    raise ValueError("validation_data.source must be 'tinystories', 'hf_text', or 'text_file'")
 
 
 def build_real_lm_datasets_from_config(config: Dict):
@@ -326,8 +350,10 @@ def build_real_lm_datasets_from_config(config: Dict):
     block_stride = config.get("block_stride")
     data_cfg = config.get("data", {})
     if data_cfg.get("cache_tokens", False):
+        if data_cfg.get("source", "tinystories") == "hf_text":
+            return build_hf_memmap_datasets(config, block_size=block_size, block_stride=block_stride)
         if data_cfg.get("source", "tinystories") != "tinystories":
-            raise ValueError("cache_tokens is currently implemented for TinyStories only.")
+            raise ValueError("cache_tokens is currently implemented for TinyStories and hf_text only.")
         return build_tinystories_memmap_datasets(config, block_size=block_size, block_stride=block_stride)
 
     train_text = load_real_text_from_config(config)

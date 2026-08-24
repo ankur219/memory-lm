@@ -293,6 +293,158 @@ def prepare_tinystories_token_cache(
     return token_path, total_tokens
 
 
+def _safe_name(text: str) -> str:
+    return "".join(ch if ch.isalnum() else "_" for ch in text).strip("_").lower()
+
+
+def load_hf_text(
+    dataset_name: str,
+    split: str,
+    text_field: str = "text",
+    dataset_config: Optional[str] = None,
+    max_examples: Optional[int] = None,
+    max_chars: Optional[int] = None,
+    cache_dir: Optional[str | Path] = None,
+    offline: bool = False,
+) -> str:
+    """Load a generic Hugging Face text dataset into one text stream."""
+
+    if offline:
+        os.environ["HF_DATASETS_OFFLINE"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
+
+    try:
+        from datasets import load_dataset
+    except ImportError as exc:
+        raise ImportError("Install `datasets` to load Hugging Face text datasets.") from exc
+
+    dataset = load_dataset(
+        dataset_name,
+        dataset_config,
+        split=split,
+        cache_dir=str(cache_dir) if cache_dir is not None else None,
+        download_mode="reuse_dataset_if_exists",
+    )
+    pieces = []
+    total_chars = 0
+    for i, row in enumerate(dataset):
+        if max_examples is not None and i >= max_examples:
+            break
+        text = row.get(text_field, "")
+        if not text:
+            continue
+        pieces.append(text)
+        total_chars += len(text)
+        if max_chars is not None and total_chars >= max_chars:
+            break
+    text = "\n\n".join(pieces)
+    if max_chars is not None:
+        text = text[:max_chars]
+    return text
+
+
+def prepare_hf_text_token_cache(
+    dataset_name: str,
+    split: str,
+    tokenizer: Tokenizer,
+    dataset_config: Optional[str] = None,
+    text_field: str = "text",
+    cache_dir: str | Path = "data/token_cache",
+    max_examples: Optional[int] = None,
+    max_chars: Optional[int] = None,
+    hf_cache_dir: Optional[str | Path] = "data/hf_cache",
+    offline: bool = False,
+) -> tuple[Path, int]:
+    """Tokenize a Hugging Face text split into a reusable uint16 memmap file."""
+
+    if tokenizer.vocab_size > np.iinfo(np.uint16).max + 1:
+        raise ValueError("The memmap cache currently expects token ids to fit in uint16.")
+    if offline:
+        os.environ["HF_DATASETS_OFFLINE"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
+
+    try:
+        from datasets import load_dataset
+    except ImportError as exc:
+        raise ImportError("Install `datasets` to load Hugging Face text datasets.") from exc
+
+    cache_root = Path(cache_dir)
+    cache_root.mkdir(parents=True, exist_ok=True)
+    tokenizer_name = getattr(tokenizer, "encoding_name", tokenizer.kind)
+    source_name = _safe_name(dataset_name)
+    config_name = _safe_name(dataset_config or "default")
+    stem = (
+        f"{source_name}_{config_name}_{split}_{tokenizer.kind}_{tokenizer_name}_"
+        f"examples-{_limit_label(max_examples)}_chars-{_limit_label(max_chars)}"
+    )
+    token_path = cache_root / f"{stem}.uint16.bin"
+    meta_path = cache_root / f"{stem}.meta.json"
+
+    if token_path.exists() and meta_path.exists():
+        count = int(np.memmap(token_path, dtype=np.uint16, mode="r").shape[0])
+        print(f"Loaded token cache from {token_path.name} ({count:,} tokens)", flush=True)
+        return token_path, count
+
+    dataset = load_dataset(
+        dataset_name,
+        dataset_config,
+        split=split,
+        cache_dir=str(hf_cache_dir) if hf_cache_dir is not None else None,
+        download_mode="reuse_dataset_if_exists",
+    )
+    total_chars = 0
+    total_tokens = 0
+    examples = 0
+    tmp_path = token_path.with_suffix(token_path.suffix + ".tmp")
+    print(f"Tokenizing {dataset_name}/{dataset_config or 'default'} {split} split...", flush=True)
+    with tmp_path.open("wb") as f:
+        for i, row in enumerate(dataset):
+            if i > 0 and i % 50000 == 0:
+                print(f"  Tokenized {i:,}/{len(dataset):,} rows...", flush=True)
+            if max_examples is not None and i >= max_examples:
+                break
+            text = row.get(text_field, "")
+            if not text:
+                continue
+            if max_chars is not None:
+                remaining = max_chars - total_chars
+                if remaining <= 0:
+                    break
+                text = text[:remaining]
+            ids = tokenizer.encode(text + "\n\n", add_eos=False)
+            arr = np.asarray(ids, dtype=np.uint16)
+            arr.tofile(f)
+            total_chars += len(text)
+            total_tokens += int(arr.shape[0])
+            examples += 1
+            if max_chars is not None and total_chars >= max_chars:
+                break
+        np.asarray([tokenizer.eos_token], dtype=np.uint16).tofile(f)
+        total_tokens += 1
+
+    tmp_path.replace(token_path)
+    display_config_name = dataset_config or "default"
+    meta_path.write_text(
+        (
+            "{\n"
+            f'  "source": "{dataset_name}",\n'
+            f'  "config": "{display_config_name}",\n'
+            f'  "split": "{split}",\n'
+            f'  "text_field": "{text_field}",\n'
+            f'  "tokenizer_kind": "{tokenizer.kind}",\n'
+            f'  "tokenizer_name": "{tokenizer_name}",\n'
+            f'  "max_examples": {max_examples if max_examples is not None else "null"},\n'
+            f'  "max_chars": {max_chars if max_chars is not None else "null"},\n'
+            f'  "examples": {examples},\n'
+            f'  "chars": {total_chars},\n'
+            f'  "tokens": {total_tokens}\n'
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    return token_path, total_tokens
+
+
 def build_tokenizer(config: Optional[dict] = None) -> Tokenizer:
     config = config or {}
     kind = config.get("kind", "tiktoken")
@@ -362,6 +514,43 @@ def build_tinystories_memmap_datasets(config: dict, block_size: int, block_strid
     val_path, _ = prepare_tinystories_token_cache(
         split=val_cfg.get("split", "validation"),
         tokenizer=tokenizer,
+        cache_dir=val_cfg.get("token_cache_dir", data_cfg.get("token_cache_dir", "data/token_cache")),
+        max_examples=val_cfg.get("max_examples"),
+        max_chars=val_cfg.get("max_chars"),
+        hf_cache_dir=val_cfg.get("cache_dir", data_cfg.get("cache_dir", "data/hf_cache")),
+        offline=bool(val_cfg.get("offline", data_cfg.get("offline", False))),
+    )
+    train_ds = MemmapTextBlockDataset(train_path, block_size, stride=block_stride)
+    val_ds = MemmapTextBlockDataset(val_path, block_size, stride=block_stride)
+    return train_ds, val_ds, tokenizer
+
+
+def build_hf_memmap_datasets(config: dict, block_size: int, block_stride: Optional[int] = None):
+    """Build train/validation datasets from a generic Hugging Face text source."""
+
+    tokenizer = build_tokenizer(config.get("tokenizer"))
+    data_cfg = config.get("data", {})
+    val_cfg = config.get("validation_data", {})
+    dataset_name = data_cfg["dataset_name"]
+    dataset_config = data_cfg.get("dataset_config")
+    train_path, _ = prepare_hf_text_token_cache(
+        dataset_name=dataset_name,
+        dataset_config=dataset_config,
+        split=data_cfg.get("split", "train"),
+        tokenizer=tokenizer,
+        text_field=data_cfg.get("text_field", "text"),
+        cache_dir=data_cfg.get("token_cache_dir", "data/token_cache"),
+        max_examples=data_cfg.get("max_examples"),
+        max_chars=data_cfg.get("max_chars"),
+        hf_cache_dir=data_cfg.get("cache_dir", "data/hf_cache"),
+        offline=bool(data_cfg.get("offline", False)),
+    )
+    val_path, _ = prepare_hf_text_token_cache(
+        dataset_name=val_cfg.get("dataset_name", dataset_name),
+        dataset_config=val_cfg.get("dataset_config", dataset_config),
+        split=val_cfg.get("split", "validation"),
+        tokenizer=tokenizer,
+        text_field=val_cfg.get("text_field", data_cfg.get("text_field", "text")),
         cache_dir=val_cfg.get("token_cache_dir", data_cfg.get("token_cache_dir", "data/token_cache")),
         max_examples=val_cfg.get("max_examples"),
         max_chars=val_cfg.get("max_chars"),

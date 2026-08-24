@@ -218,9 +218,44 @@ full because `final_eval_max_batches` is unset. The CSV logs include
 are explicit.
 
 Qualitative samples are printed every 1000 steps. Each sample prints the fed
-prompt separately from the predicted continuation, so it is clear what the
-model received and what it generated. When `max_steps` is unset, `num_epochs: 1`
-means one pass over the available training blocks.
+prompt separately from the predicted continuation.
+
+## WikiText-103 Comparison
+
+After TinyStories, run the same matched comparison on WikiText-103. This checks
+whether the result is specific to simple story text or also appears on a more
+general language-modeling corpus.
+
+First inspect token counts, parameter counts, and memory budgets:
+
+```bash
+cd memory-lm
+python3 experiments/count_real_tokens.py \
+  configs/wikitext_baseline.yaml \
+  configs/wikitext_per_token.yaml \
+  configs/wikitext_recurrent.yaml
+```
+
+Then launch the full comparison:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_wikitext_comparison.py > wikitext.out 2>&1 &
+tail -f wikitext.out
+```
+
+Summarize the final logs:
+
+```bash
+cd memory-lm
+python3 experiments/summarize_wikitext_comparison.py
+```
+
+The first run downloads WikiText-103 from Hugging Face and writes token caches
+under `data/token_cache/`. Later runs reuse those cached token files.
+
+When `max_steps` is unset, `num_epochs: 1` means one pass over the available
+training blocks.
 
 Real-data runs also save checkpoints every 5000 steps and at the end:
 

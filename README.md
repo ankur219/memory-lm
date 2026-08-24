@@ -17,6 +17,9 @@ The first milestone is intentionally modest. It proves that three model families
 
 This is not large-scale pretraining yet.
 
+See `RESULTS.md` for the current TinyStories and synthetic KV retrieval
+checkpoint.
+
 ## Repository Layout
 
 ```text

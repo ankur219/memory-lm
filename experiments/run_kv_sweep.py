@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +87,26 @@ def make_config(model_name: str, num_pairs: int, vocab_size: int) -> Transformer
     return base
 
 
+def weighted_next_token_loss(logits: torch.Tensor, input_ids: torch.Tensor, targets: torch.Tensor, answer_weight: float):
+    """Cross-entropy with optional extra weight on answer-token positions."""
+
+    per_token_loss = F.cross_entropy(
+        logits.reshape(-1, logits.size(-1)),
+        targets.reshape(-1),
+        ignore_index=-100,
+        reduction="none",
+    ).view_as(targets)
+    valid = targets != -100
+    weights = valid.float()
+    if answer_weight != 1.0:
+        weights = weights * torch.where(
+            input_ids == ANSWER,
+            torch.full_like(weights, float(answer_weight)),
+            torch.ones_like(weights),
+        )
+    return (per_token_loss * weights).sum() / weights.sum().clamp_min(1.0)
+
+
 def train_one(model_name: str, num_pairs: int, args) -> dict:
     seed = args.seed + num_pairs * 100
     torch.manual_seed(seed)
@@ -135,8 +156,8 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
             step += 1
             input_ids = input_ids.to(device)
             targets = targets.to(device)
-            out = model(input_ids, targets=targets)
-            loss = out["loss"]
+            logits = model(input_ids)["logits"]
+            loss = weighted_next_token_loss(logits, input_ids, targets, args.answer_loss_weight)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
@@ -164,6 +185,7 @@ def train_one(model_name: str, num_pairs: int, args) -> dict:
         "sequence_length": seq_len,
         "steps": args.steps,
         "supervise_all_tokens": args.supervise_all_tokens,
+        "answer_loss_weight": args.answer_loss_weight,
         "train_loss": last_loss,
         "test_answer_accuracy": test_acc,
         "params": params["total"],
@@ -187,6 +209,7 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--answer-loss-weight", type=float, default=1.0)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument(
         "--supervise-all-tokens",

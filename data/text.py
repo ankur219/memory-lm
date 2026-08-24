@@ -236,6 +236,7 @@ def prepare_tinystories_token_cache(
 
     if token_path.exists() and meta_path.exists():
         count = int(np.memmap(token_path, dtype=np.uint16, mode="r").shape[0])
+        print(f"Loaded token cache from {token_path.name} ({count:,} tokens)", flush=True)
         return token_path, count
 
     dataset = load_dataset(
@@ -248,8 +249,11 @@ def prepare_tinystories_token_cache(
     total_tokens = 0
     examples = 0
     tmp_path = token_path.with_suffix(token_path.suffix + ".tmp")
+    print(f"Tokenizing {len(dataset):,} stories in {split} split (creating memmap cache)...", flush=True)
     with tmp_path.open("wb") as f:
         for i, row in enumerate(dataset):
+            if i > 0 and i % 50000 == 0:
+                print(f"  Tokenized {i:,}/{len(dataset):,} stories...", flush=True)
             if max_examples is not None and i >= max_examples:
                 break
             story = row.get("text", "")

@@ -20,6 +20,25 @@ This is not large-scale pretraining yet.
 See `RESULTS.md` for the current TinyStories and synthetic KV retrieval
 checkpoint.
 
+## Current TODOs
+
+1. Finish the larger TinyStories run.
+   This checks whether the 7M-parameter result survives at the intended 30M-50M starting scale.
+2. Record the larger TinyStories result in `RESULTS.md`.
+   Keep the research log synchronized with completed runs.
+3. Add and run larger WikiText configs.
+   This tests whether the scaled result generalizes beyond TinyStories.
+4. Run the associative recurrent synthetic probes.
+   Compare `recurrent` vs `assoc_recurrent` on copy, needle, and KV retrieval before spending real-data compute.
+5. Analyze recurrent diagnostics.
+   Compare read/write entropy, slot usage, and memory update norms for naive vs associative recurrent memory.
+6. Decide whether associative memory earns a real-data run.
+   Only run associative LM pretraining if it improves the cheap synthetic exact-recall probes.
+7. Write the related-work section.
+   Position against Transformer-XL, Compressive Transformer, RMT, ARMT, TransformerFAM, Infini-Transformer, Key-Value Means, Melodi, and Memorizing Transformers.
+8. Draft the arXiv/workshop paper.
+   Current target is arXiv first, then ICLR/COLM 2027 workshops if the scaled and associative results are strong enough.
+
 ## Repository Layout
 
 ```text

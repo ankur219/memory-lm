@@ -309,14 +309,15 @@ python3 experiments/summarize_large_tinystories_comparison.py
 The first structured recurrent variant is available as `assoc_recurrent`. It
 uses explicit associative reads and writes with fixed learned memory keys,
 separate learned write queries, and per-sequence memory values. For the small
-synthetic probes, compare it against naive recurrent using the same `64x512`
-memory shape:
+synthetic probes, compare it against naive recurrent using `256x128`: 256
+memory slots, 128 floats per slot, 32,768 persistent memory floats total. This
+keeps memory width equal to the small synthetic model hidden size.
 
 ```bash
 python3 experiments/run_copy_sweep.py \
   --lengths 16 32 64 \
   --models recurrent assoc_recurrent \
-  --recurrent-shapes 64x512 \
+  --recurrent-shapes 256x128 \
   --steps 3000 \
   --num-examples 30000 \
   --test-examples 3000 \
@@ -328,7 +329,7 @@ python3 experiments/run_copy_sweep.py \
 python3 experiments/run_needle_sweep.py \
   --gaps 16 32 64 \
   --models recurrent assoc_recurrent \
-  --recurrent-shapes 64x512 \
+  --recurrent-shapes 256x128 \
   --steps 3000 \
   --num-examples 30000 \
   --test-examples 3000 \
@@ -341,7 +342,7 @@ python3 experiments/run_needle_sweep.py \
 python3 experiments/run_kv_sweep.py \
   --pairs 4 8 16 \
   --models recurrent assoc_recurrent \
-  --recurrent-shapes 64x512 \
+  --recurrent-shapes 256x128 \
   --steps 5000 \
   --num-examples 50000 \
   --test-examples 5000 \

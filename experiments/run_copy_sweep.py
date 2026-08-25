@@ -88,8 +88,8 @@ def make_config(
                 num_memory_tokens=cfg.num_memory_tokens,
             )
     elif model_name == "assoc_recurrent":
-        cfg.num_memory_tokens = recurrent_shape[0] if recurrent_shape is not None else 64
-        cfg.recurrent_memory_dim = recurrent_shape[1] if recurrent_shape is not None else 512
+        cfg.num_memory_tokens = recurrent_shape[0] if recurrent_shape is not None else 256
+        cfg.recurrent_memory_dim = recurrent_shape[1] if recurrent_shape is not None else cfg.hidden_size
     return cfg
 
 
@@ -229,7 +229,7 @@ def main() -> None:
         nargs="+",
         type=parse_recurrent_shape,
         default=None,
-        help="Optional recurrent shapes like 8x4096 16x2048. Only applies to recurrent.",
+        help="Optional recurrent shapes like 256x128. Applies to recurrent and assoc_recurrent.",
     )
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--num-examples", type=int, default=5000)

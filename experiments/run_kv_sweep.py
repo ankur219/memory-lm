@@ -35,13 +35,13 @@ from training.trainer import build_model, memory_budget_for_model
 
 
 def parse_recurrent_shape(shape: str) -> tuple[int, int]:
-    """Parse strings like '64x512' into (num_memory_tokens, memory_dim)."""
+    """Parse strings like '256x128' into (num_memory_tokens, memory_dim)."""
 
     try:
         tokens, dim = shape.lower().split("x", maxsplit=1)
         return int(tokens), int(dim)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("recurrent shapes must look like 64x512") from exc
+        raise argparse.ArgumentTypeError("recurrent shapes must look like 256x128") from exc
 
 
 @torch.no_grad()
@@ -104,8 +104,8 @@ def make_config(
                 num_memory_tokens=base.num_memory_tokens,
             )
     elif model_name == "assoc_recurrent":
-        base.num_memory_tokens = recurrent_shape[0] if recurrent_shape is not None else 64
-        base.recurrent_memory_dim = recurrent_shape[1] if recurrent_shape is not None else 512
+        base.num_memory_tokens = recurrent_shape[0] if recurrent_shape is not None else 256
+        base.recurrent_memory_dim = recurrent_shape[1] if recurrent_shape is not None else base.hidden_size
     return base
 
 
@@ -260,7 +260,7 @@ def main() -> None:
         nargs="+",
         type=parse_recurrent_shape,
         default=None,
-        help="Optional recurrent shapes like 64x512. Applies to recurrent and assoc_recurrent.",
+        help="Optional recurrent shapes like 256x128. Applies to recurrent and assoc_recurrent.",
     )
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--num-examples", type=int, default=5000)

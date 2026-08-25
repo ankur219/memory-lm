@@ -30,13 +30,19 @@ checkpoint.
    This tests whether the scaled result generalizes beyond TinyStories.
 4. Run the associative recurrent synthetic probes.
    Compare `recurrent` vs `assoc_recurrent` on copy, needle, and KV retrieval before spending real-data compute.
-5. Analyze recurrent diagnostics.
+5. Run associative memory shape sweeps.
+   Reuse `--recurrent-shapes` to compare slot-count/dim trade-offs for `assoc_recurrent`, not only naive recurrent.
+6. Analyze recurrent diagnostics.
    Compare read/write entropy, slot usage, and memory update norms for naive vs associative recurrent memory.
-6. Decide whether associative memory earns a real-data run.
+7. Add multi-seed reporting.
+   Run 3-5 seeds for the main synthetic and real-data comparisons and report mean plus standard deviation.
+8. Write a capacity-style argument.
+   Explain why many-small per-token memory may preserve exact detail better than few-rich memory under a fixed budget.
+9. Decide whether associative memory earns a real-data run.
    Only run associative LM pretraining if it improves the cheap synthetic exact-recall probes.
-7. Write the related-work section.
+10. Write the related-work section.
    Position against Transformer-XL, Compressive Transformer, RMT, ARMT, TransformerFAM, Infini-Transformer, Key-Value Means, Melodi, and Memorizing Transformers.
-8. Draft the arXiv/workshop paper.
+11. Draft the arXiv/workshop paper.
    Current target is arXiv first, then ICLR/COLM 2027 workshops if the scaled and associative results are strong enough.
 
 ## Repository Layout

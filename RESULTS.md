@@ -30,6 +30,41 @@ Interpretation:
 - Recurrent few-rich is faster and uses much less peak VRAM than per-token, but has worse loss.
 - Cross-attention recurrent did not improve over the simpler mean-GRU update in this run.
 
+## WikiText-103 Full Validation
+
+Setup:
+
+- Dataset: full WikiText-103 train split, `Salesforce/wikitext`, `wikitext-103-raw-v1`.
+- Validation: full WikiText-103 validation split.
+- Tokenizer: GPT-2 `tiktoken`.
+- Train tokens per model: 119,085,056 processed from a 119,085,170-token cache.
+- Validation tokens: 249,751-token cache, evaluated in 16 batches.
+- Context length: 128.
+- Batch size: 128.
+- Memory-compressed variants use 32,768 persistent memory floats.
+
+Command:
+
+```bash
+python3 experiments/run_wikitext_comparison.py
+python3 experiments/summarize_wikitext_comparison.py
+```
+
+Result:
+
+| Model | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Baseline | 4.3248 | 4.3454 | 77.12 | 182.6k | 13,184 MB | 6,957,824 | 65,536 |
+| Per-token many-small | 4.5074 | 4.3592 | 78.19 | 135.4k | 16,286 MB | 6,942,976 | 32,768 |
+| Recurrent few-rich | 4.1705 | 4.4231 | 83.36 | 175.8k | 13,344 MB | 6,942,976 | 32,768 |
+
+Interpretation:
+
+- Baseline is best, as expected, because it uses twice the persistent memory.
+- Per-token many-small is very close to baseline despite using half the persistent memory.
+- Recurrent few-rich is worse than per-token on validation loss, but runs much faster than per-token.
+- The ordering matches TinyStories: baseline best, per-token close behind, recurrent worse.
+
 ## Synthetic KV Retrieval
 
 The synthetic task tests exact retrieval:
@@ -301,5 +336,5 @@ small models.
 
 Next useful experiments:
 
-1. Add a second real-text dataset.
-2. Explore more substantial recurrent redesigns, not just update variants.
+1. Explore more substantial recurrent redesigns, not just update variants.
+2. Run one larger 30M-50M matched-budget configuration if compute allows.

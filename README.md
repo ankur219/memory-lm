@@ -257,6 +257,34 @@ under `data/token_cache/`. Later runs reuse those cached token files.
 When `max_steps` is unset, `num_epochs: 1` means one pass over the available
 training blocks.
 
+## Larger TinyStories Comparison
+
+The initial full TinyStories and WikiText runs use small 7M-parameter models.
+To move closer to the research target, run the larger TinyStories configs:
+
+```bash
+cd memory-lm
+python3 experiments/count_real_tokens.py \
+  configs/large_tinystories_baseline.yaml \
+  configs/large_tinystories_per_token.yaml \
+  configs/large_tinystories_recurrent.yaml
+```
+
+Then launch:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_tinystories_comparison.py > large_tinystories.out 2>&1 &
+tail -f large_tinystories.out
+```
+
+Summarize after completion:
+
+```bash
+cd memory-lm
+python3 experiments/summarize_large_tinystories_comparison.py
+```
+
 Real-data runs also save checkpoints every 5000 steps and at the end:
 
 ```text

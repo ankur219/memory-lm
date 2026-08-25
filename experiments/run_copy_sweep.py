@@ -87,6 +87,9 @@ def make_config(
                 sequence_length=seq_len,
                 num_memory_tokens=cfg.num_memory_tokens,
             )
+    elif model_name == "assoc_recurrent":
+        cfg.num_memory_tokens = recurrent_shape[0] if recurrent_shape is not None else 64
+        cfg.recurrent_memory_dim = recurrent_shape[1] if recurrent_shape is not None else 512
     return cfg
 
 
@@ -132,7 +135,7 @@ def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[in
     )
     shape_label = (
         f"{cfg.num_memory_tokens}x{cfg.recurrent_memory_dim}"
-        if model_name == "recurrent"
+        if model_name in {"recurrent", "assoc_recurrent"}
         else ""
     )
     model = build_model(model_name, cfg).to(device)
@@ -170,6 +173,7 @@ def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[in
                 break
 
     test_acc = copy_accuracy(model, test_loader, device)
+    diagnostics = collect_diagnostics(model, test_loader, device)
     elapsed = time.time() - start
     seq_len = 2 * copy_length + 3
     mem = memory_budget_for_model(model_name, cfg, sequence_length=seq_len)
@@ -187,10 +191,32 @@ def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[in
         "test_copy_accuracy": test_acc,
         "params": params["total"],
         "memory_floats": mem["floats"],
-        "num_memory_tokens": cfg.num_memory_tokens if model_name == "recurrent" else "",
+        "num_memory_tokens": cfg.num_memory_tokens if model_name in {"recurrent", "assoc_recurrent"} else "",
         "recurrent_memory_dim": cfg.recurrent_memory_dim or "",
         "training_time_sec": elapsed,
         "peak_gpu_memory_mb": peak_gpu_mb,
+        **diagnostics,
+    }
+
+
+@torch.no_grad()
+def collect_diagnostics(model, dataloader, device: torch.device) -> dict:
+    """Collect optional recurrent-memory diagnostics from one held-out batch."""
+
+    model.eval()
+    try:
+        input_ids, _ = next(iter(dataloader))
+    except StopIteration:
+        model.train()
+        return {}
+    out = model(input_ids.to(device))
+    model.train()
+    diagnostics = out.get("diagnostics", {})
+    return {
+        "read_entropy": diagnostics.get("read_entropy", ""),
+        "write_entropy": diagnostics.get("write_entropy", ""),
+        "memory_delta_norm": diagnostics.get("memory_delta_norm", ""),
+        "memory_value_norm": diagnostics.get("memory_value_norm", ""),
     }
 
 
@@ -214,6 +240,7 @@ def main() -> None:
         "--recurrent-update-style",
         choices=["mean_gru", "cross_attention", "last_tokens"],
         default="cross_attention",
+        help="Only applies to the naive recurrent model. assoc_recurrent uses explicit associative read/write.",
     )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
@@ -234,7 +261,9 @@ def main() -> None:
     for copy_length in args.lengths:
         for model_name in args.models:
             recurrent_shapes = (
-                args.recurrent_shapes if model_name == "recurrent" and args.recurrent_shapes else [None]
+                args.recurrent_shapes
+                if model_name in {"recurrent", "assoc_recurrent"} and args.recurrent_shapes
+                else [None]
             )
             for recurrent_shape in recurrent_shapes:
                 rows.append(train_one(model_name, copy_length, args, recurrent_shape=recurrent_shape))

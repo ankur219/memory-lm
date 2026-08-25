@@ -31,10 +31,17 @@ from evaluation.efficiency import (
 )
 from evaluation.language_modeling import evaluate_loss
 from evaluation.memory_tasks import token_accuracy
-from models import DecoderOnlyTransformer, PerTokenMemoryTransformer, RecurrentMemoryTransformer, TransformerConfig
+from models import (
+    AssociativeRecurrentMemoryTransformer,
+    DecoderOnlyTransformer,
+    PerTokenMemoryTransformer,
+    RecurrentMemoryTransformer,
+    TransformerConfig,
+)
 
 
 MODEL_REGISTRY = {
+    "assoc_recurrent": AssociativeRecurrentMemoryTransformer,
     "baseline": DecoderOnlyTransformer,
     "per_token": PerTokenMemoryTransformer,
     "recurrent": RecurrentMemoryTransformer,
@@ -61,7 +68,7 @@ def memory_budget_for_model(model_name: str, config: TransformerConfig, sequence
         return baseline_kv_memory_budget(config, sequence_length)
     if model_name == "per_token":
         return per_token_memory_budget(config, sequence_length)
-    if model_name == "recurrent":
+    if model_name in {"recurrent", "assoc_recurrent"}:
         return recurrent_memory_budget(config, per_layer_memory=config.per_layer_memory)
     raise ValueError(model_name)
 

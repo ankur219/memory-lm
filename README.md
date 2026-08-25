@@ -285,6 +285,59 @@ cd memory-lm
 python3 experiments/summarize_large_tinystories_comparison.py
 ```
 
+## Associative Recurrent Synthetic Probe
+
+The first structured recurrent variant is available as `assoc_recurrent`. It
+uses explicit associative reads and writes with fixed learned memory keys,
+separate learned write queries, and per-sequence memory values. For the small
+synthetic probes, compare it against naive recurrent using the same `64x512`
+memory shape:
+
+```bash
+python3 experiments/run_copy_sweep.py \
+  --lengths 16 32 64 \
+  --models recurrent assoc_recurrent \
+  --recurrent-shapes 64x512 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --csv-path logs/copy_assoc_recurrent.csv
+```
+
+```bash
+python3 experiments/run_needle_sweep.py \
+  --gaps 16 32 64 \
+  --models recurrent assoc_recurrent \
+  --recurrent-shapes 64x512 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --answer-loss-weight 10 \
+  --csv-path logs/needle_assoc_recurrent.csv
+```
+
+```bash
+python3 experiments/run_kv_sweep.py \
+  --pairs 4 8 16 \
+  --models recurrent assoc_recurrent \
+  --recurrent-shapes 64x512 \
+  --steps 5000 \
+  --num-examples 50000 \
+  --test-examples 5000 \
+  --batch-size 128 \
+  --num-keys 16 \
+  --num-values 16 \
+  --answer-loss-weight 20 \
+  --value-mode random \
+  --csv-path logs/kv_assoc_recurrent.csv
+```
+
+These CSV files include memory diagnostics where available:
+`read_entropy`, `write_entropy`, `memory_delta_norm`, and
+`memory_value_norm`.
+
 Real-data runs also save checkpoints every 5000 steps and at the end:
 
 ```text

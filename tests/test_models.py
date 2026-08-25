@@ -1,6 +1,12 @@
 import torch
 
-from models import DecoderOnlyTransformer, PerTokenMemoryTransformer, RecurrentMemoryTransformer, TransformerConfig
+from models import (
+    AssociativeRecurrentMemoryTransformer,
+    DecoderOnlyTransformer,
+    PerTokenMemoryTransformer,
+    RecurrentMemoryTransformer,
+    TransformerConfig,
+)
 
 
 def tiny_config(**overrides):
@@ -24,7 +30,12 @@ def tiny_config(**overrides):
 def test_model_output_shapes():
     input_ids = torch.randint(0, 64, (3, 12))
     targets = torch.randint(0, 64, (3, 12))
-    for cls in [DecoderOnlyTransformer, PerTokenMemoryTransformer, RecurrentMemoryTransformer]:
+    for cls in [
+        DecoderOnlyTransformer,
+        PerTokenMemoryTransformer,
+        RecurrentMemoryTransformer,
+        AssociativeRecurrentMemoryTransformer,
+    ]:
         model = cls(tiny_config())
         out = model(input_ids, targets=targets)
         assert out["logits"].shape == (3, 12, 64)
@@ -46,6 +57,7 @@ def test_causal_behavior_for_all_models():
     assert_causal(DecoderOnlyTransformer(tiny_config()))
     assert_causal(PerTokenMemoryTransformer(tiny_config()))
     assert_causal(RecurrentMemoryTransformer(tiny_config()))
+    assert_causal(AssociativeRecurrentMemoryTransformer(tiny_config()))
 
 
 def test_per_token_cache_uses_compressed_width():
@@ -68,6 +80,24 @@ def test_recurrent_rich_memory_shape():
     model = RecurrentMemoryTransformer(cfg)
     out = model(torch.randint(0, 64, (2, 11)))
     assert out["memory"].shape == (2, 5, 96)
+
+
+def test_associative_recurrent_memory_shape_and_diagnostics():
+    cfg = tiny_config(num_memory_tokens=7, recurrent_memory_dim=32, chunk_size=4)
+    model = AssociativeRecurrentMemoryTransformer(cfg)
+    out = model(torch.randint(0, 64, (2, 11)))
+    assert out["memory"].shape == (2, 7, 32)
+    assert out["diagnostics"]["read_entropy"] > 0
+    assert out["diagnostics"]["write_entropy"] > 0
+
+
+def test_associative_recurrent_updates_values_not_keys_per_sequence():
+    cfg = tiny_config(num_memory_tokens=4, recurrent_memory_dim=32, chunk_size=4)
+    model = AssociativeRecurrentMemoryTransformer(cfg)
+    keys_before = model.memory_read_keys.detach().clone()
+    out = model(torch.randint(0, 64, (2, 12)))
+    assert out["memory"].shape == (2, 4, 32)
+    torch.testing.assert_close(model.memory_read_keys.detach(), keys_before)
 
 
 def test_recurrent_memory_update_gets_gradients_across_chunks():

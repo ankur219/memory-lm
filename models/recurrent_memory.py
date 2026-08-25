@@ -139,6 +139,7 @@ class RecurrentMemoryTransformer(nn.Module):
             candidate = torch.tanh(candidate_up(summary))  # [batch, num_memory_tokens, recurrent_memory_dim]
             gate = torch.sigmoid(gate_up(summary))  # [batch, num_memory_tokens, recurrent_memory_dim]
             memory_out = mem_state * (1.0 - gate) + candidate * gate
+            write_entropy = -(attn.clamp_min(1e-9) * attn.clamp_min(1e-9).log()).sum(dim=-1).mean()
         elif self.config.recurrent_update_style == "last_tokens":
             # Ordered recent-token update. Instead of compressing the whole
             # chunk into one mean vector, each memory slot receives one of the
@@ -154,6 +155,7 @@ class RecurrentMemoryTransformer(nn.Module):
             candidate = torch.tanh(candidate_up(summary))
             gate = torch.sigmoid(gate_up(summary))
             memory_out = mem_state * (1.0 - gate) + candidate * gate
+            write_entropy = token_out.new_tensor(float("nan"))
         else:
             # Classic mean pooled update (original mean_gru)
             chunk_summary = token_out.mean(dim=1)  # [batch, hidden_size]
@@ -161,8 +163,14 @@ class RecurrentMemoryTransformer(nn.Module):
             candidate = torch.tanh(candidate_up(summary))[:, None, :]  # [batch, 1, recurrent_memory_dim]
             gate = torch.sigmoid(gate_up(summary))[:, None, :]  # [batch, 1, recurrent_memory_dim]
             memory_out = mem_state * (1.0 - gate) + candidate.expand_as(mem_state) * gate
+            write_entropy = token_out.new_tensor(float("nan"))
             
-        return memory_out
+        diagnostics = {
+            "write_entropy": float(write_entropy.detach().cpu()),
+            "memory_delta_norm": float((memory_out - mem_state).norm(dim=-1).mean().detach().cpu()),
+            "memory_value_norm": float(memory_out.norm(dim=-1).mean().detach().cpu()),
+        }
+        return memory_out, diagnostics
 
     def _run_chunk(self, token_embeddings: torch.Tensor, memory: torch.Tensor):
         caches = []
@@ -182,10 +190,16 @@ class RecurrentMemoryTransformer(nn.Module):
                 
             token_out = x
             updated_memories = []
+            diagnostic_rows = []
             for l in range(self.config.num_layers):
-                updated_mem_l = self._update_memory_state(memory[:, l], token_outs_by_layer[l], layer_idx=l)
+                updated_mem_l, diagnostics_l = self._update_memory_state(memory[:, l], token_outs_by_layer[l], layer_idx=l)
                 updated_memories.append(updated_mem_l)
+                diagnostic_rows.append(diagnostics_l)
             memory_out = torch.stack(updated_memories, dim=1)
+            diagnostics = {
+                key: sum(row[key] for row in diagnostic_rows) / len(diagnostic_rows)
+                for key in diagnostic_rows[0]
+            }
         else:
             memory_prefix = self.memory_up(self.memory_down(memory))
             x = torch.cat([memory_prefix, token_embeddings], dim=1)
@@ -193,9 +207,9 @@ class RecurrentMemoryTransformer(nn.Module):
                 x, cache = layer(x, self.rope_cos, self.rope_sin)
                 caches.append(cache)
             token_out = x[:, self.config.num_memory_tokens:, :]
-            memory_out = self._update_memory_state(memory, token_out)
+            memory_out, diagnostics = self._update_memory_state(memory, token_out)
 
-        return token_out, memory_out, caches
+        return token_out, memory_out, caches, diagnostics
 
     def forward(self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None):
         batch, seq_len = input_ids.shape
@@ -205,13 +219,15 @@ class RecurrentMemoryTransformer(nn.Module):
             memory = self.initial_memory.unsqueeze(0).expand(batch, -1, -1)
         outputs = []
         all_caches = []
+        diagnostic_rows = []
 
         for start in range(0, seq_len, self.config.chunk_size):
             end = min(start + self.config.chunk_size, seq_len)
             token_embeddings = self.embed_tokens(input_ids[:, start:end])
-            token_out, memory, caches = self._run_chunk(token_embeddings, memory)
+            token_out, memory, caches, diagnostics = self._run_chunk(token_embeddings, memory)
             outputs.append(token_out)
             all_caches.append(caches)
+            diagnostic_rows.append(diagnostics)
 
         x = torch.cat(outputs, dim=1)
         logits = self.lm_head(self.norm(x))
@@ -220,4 +236,9 @@ class RecurrentMemoryTransformer(nn.Module):
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=-100)
-        return {"logits": logits, "loss": loss, "memory": memory, "cache": all_caches}
+        diagnostics = {}
+        if diagnostic_rows:
+            for key in diagnostic_rows[0]:
+                values = [row[key] for row in diagnostic_rows if row[key] == row[key]]
+                diagnostics[key] = sum(values) / len(values) if values else ""
+        return {"logits": logits, "loss": loss, "memory": memory, "cache": all_caches, "diagnostics": diagnostics}

@@ -56,11 +56,22 @@ def weighted_loss(logits, input_ids, targets, answer_weight: float):
     return (per_token_loss * weights).sum() / weights.sum().clamp_min(1.0)
 
 
+def parse_recurrent_shape(shape: str) -> tuple[int, int]:
+    """Parse strings like '64x512' into (num_memory_tokens, memory_dim)."""
+
+    try:
+        tokens, dim = shape.lower().split("x", maxsplit=1)
+        return int(tokens), int(dim)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("recurrent shapes must look like 64x512") from exc
+
+
 def make_config(
     model_name: str,
     sequence_length: int,
     vocab_size: int,
     recurrent_update_style: str = "cross_attention",
+    recurrent_shape: tuple[int, int] | None = None,
 ) -> TransformerConfig:
     cfg = TransformerConfig(
         vocab_size=vocab_size,
@@ -80,15 +91,22 @@ def make_config(
         chunk_size=32,
     )
     if model_name == "recurrent":
-        cfg.recurrent_memory_dim = matched_recurrent_dim_for_per_token(
-            cfg,
-            sequence_length=sequence_length,
-            num_memory_tokens=cfg.num_memory_tokens,
-        )
+        if recurrent_shape is not None:
+            cfg.num_memory_tokens = recurrent_shape[0]
+            cfg.recurrent_memory_dim = recurrent_shape[1]
+        else:
+            cfg.recurrent_memory_dim = matched_recurrent_dim_for_per_token(
+                cfg,
+                sequence_length=sequence_length,
+                num_memory_tokens=cfg.num_memory_tokens,
+            )
+    elif model_name == "assoc_recurrent":
+        cfg.num_memory_tokens = recurrent_shape[0] if recurrent_shape is not None else 64
+        cfg.recurrent_memory_dim = recurrent_shape[1] if recurrent_shape is not None else 512
     return cfg
 
 
-def train_one(model_name: str, gap_length: int, args) -> dict:
+def train_one(model_name: str, gap_length: int, args, recurrent_shape: tuple[int, int] | None = None) -> dict:
     seed = args.seed + gap_length * 100
     torch.manual_seed(seed)
     requested_device = args.device
@@ -131,6 +149,12 @@ def train_one(model_name: str, gap_length: int, args) -> dict:
         sequence_length,
         train_val.vocab_size,
         recurrent_update_style=args.recurrent_update_style,
+        recurrent_shape=recurrent_shape,
+    )
+    shape_label = (
+        f"{cfg.num_memory_tokens}x{cfg.recurrent_memory_dim}"
+        if model_name in {"recurrent", "assoc_recurrent"}
+        else ""
     )
     model = build_model(model_name, cfg).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -155,7 +179,7 @@ def train_one(model_name: str, gap_length: int, args) -> dict:
             if step == 1 or step % args.log_every == 0 or step == args.steps:
                 val_acc = answer_accuracy(model, val_loader, device)
                 print(
-                    f"gap {gap_length:03d} | {model_name:9s} | "
+                    f"gap {gap_length:03d} | {model_name:15s} | {shape_label:7s} | "
                     f"step {step:04d} | loss {last_loss:.4f} | answer_acc {val_acc:.3f}",
                     flush=True,
                 )
@@ -163,12 +187,14 @@ def train_one(model_name: str, gap_length: int, args) -> dict:
                 break
 
     test_acc = answer_accuracy(model, test_loader, device)
+    diagnostics = collect_diagnostics(model, test_loader, device)
     elapsed = time.time() - start
     mem = memory_budget_for_model(model_name, cfg, sequence_length=sequence_length)
     params = parameter_breakdown(model)
     peak_gpu_mb = torch.cuda.max_memory_allocated() / (1024**2) if device.type == "cuda" else 0.0
     return {
         "model": model_name,
+        "recurrent_shape": shape_label,
         "recurrent_update_style": cfg.recurrent_update_style if model_name == "recurrent" else "",
         "gap_length": gap_length,
         "sequence_length": sequence_length,
@@ -179,9 +205,32 @@ def train_one(model_name: str, gap_length: int, args) -> dict:
         "test_answer_accuracy": test_acc,
         "params": params["total"],
         "memory_floats": mem["floats"],
+        "num_memory_tokens": cfg.num_memory_tokens if model_name in {"recurrent", "assoc_recurrent"} else "",
         "recurrent_memory_dim": cfg.recurrent_memory_dim or "",
         "training_time_sec": elapsed,
         "peak_gpu_memory_mb": peak_gpu_mb,
+        **diagnostics,
+    }
+
+
+@torch.no_grad()
+def collect_diagnostics(model, dataloader, device: torch.device) -> dict:
+    """Collect optional recurrent-memory diagnostics from one held-out batch."""
+
+    model.eval()
+    try:
+        input_ids, _ = next(iter(dataloader))
+    except StopIteration:
+        model.train()
+        return {}
+    out = model(input_ids.to(device))
+    model.train()
+    diagnostics = out.get("diagnostics", {})
+    return {
+        "read_entropy": diagnostics.get("read_entropy", ""),
+        "write_entropy": diagnostics.get("write_entropy", ""),
+        "memory_delta_norm": diagnostics.get("memory_delta_norm", ""),
+        "memory_value_norm": diagnostics.get("memory_value_norm", ""),
     }
 
 
@@ -189,6 +238,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gaps", nargs="+", type=int, default=[8, 16, 32, 64])
     parser.add_argument("--models", nargs="+", default=["baseline", "per_token", "recurrent"])
+    parser.add_argument(
+        "--recurrent-shapes",
+        nargs="+",
+        type=parse_recurrent_shape,
+        default=None,
+        help="Optional recurrent shapes like 64x512. Applies to recurrent and assoc_recurrent.",
+    )
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--num-examples", type=int, default=5000)
     parser.add_argument("--test-examples", type=int, default=1000)
@@ -200,6 +256,7 @@ def main() -> None:
         "--recurrent-update-style",
         choices=["mean_gru", "cross_attention", "last_tokens"],
         default="cross_attention",
+        help="Only applies to the naive recurrent model. assoc_recurrent uses explicit associative read/write.",
     )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
@@ -220,12 +277,18 @@ def main() -> None:
     rows = []
     for gap_length in args.gaps:
         for model_name in args.models:
-            rows.append(train_one(model_name, gap_length, args))
-            Path(args.csv_path).parent.mkdir(parents=True, exist_ok=True)
-            with Path(args.csv_path).open("w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-                writer.writeheader()
-                writer.writerows(rows)
+            recurrent_shapes = (
+                args.recurrent_shapes
+                if model_name in {"recurrent", "assoc_recurrent"} and args.recurrent_shapes
+                else [None]
+            )
+            for recurrent_shape in recurrent_shapes:
+                rows.append(train_one(model_name, gap_length, args, recurrent_shape=recurrent_shape))
+                Path(args.csv_path).parent.mkdir(parents=True, exist_ok=True)
+                with Path(args.csv_path).open("w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                    writer.writeheader()
+                    writer.writerows(rows)
 
     print(f"\nwrote {args.csv_path}")
 

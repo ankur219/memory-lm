@@ -403,6 +403,49 @@ Interpretation: baseline and per-token recall the needle perfectly up to gap
 64. The recurrent model collapses after gap 16, matching the copy-task failure
 mode.
 
+### Associative Recurrent Needle Probe
+
+This sweep compares naive recurrent memory against associative recurrent memory
+using the same `256x128` persistent-memory shape, or 32,768 memory floats.
+
+Command:
+
+```bash
+python3 experiments/run_needle_sweep.py \
+  --gaps 16 32 64 \
+  --models recurrent assoc_recurrent \
+  --recurrent-shapes 256x128 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --answer-loss-weight 10 \
+  --csv-path logs/needle_assoc_recurrent.csv
+```
+
+Result:
+
+| Gap Length | Naive recurrent | Assoc recurrent |
+|---:|---:|---:|
+| 16 | 1.000 | 1.000 |
+| 32 | 0.014 | 0.014 |
+| 64 | 0.013 | 0.015 |
+
+Diagnostics:
+
+| Gap Length | Model | Params | Mem Floats | Write Entropy | Delta Norm | Value Norm |
+|---:|---|---:|---:|---:|---:|---:|
+| 16 | Naive recurrent | 480,128 | 32,768 | 3.401 | 0.161 | 0.161 |
+| 16 | Assoc recurrent | 640,896 | 32,768 | 3.401 | 3.294 | 3.294 |
+| 32 | Naive recurrent | 480,128 | 32,768 | 2.161 | 3.446 | 2.998 |
+| 32 | Assoc recurrent | 640,896 | 32,768 | 2.438 | 3.448 | 3.447 |
+| 64 | Naive recurrent | 480,128 | 32,768 | 1.157 | 2.878 | 3.108 |
+| 64 | Assoc recurrent | 640,896 | 32,768 | 1.155 | 21.351 | 18.855 |
+
+Interpretation: associative recurrent memory does not fix needle recall. Both
+models solve gap 16 and collapse at gaps 32-64. The associative model again
+shows larger memory value/update norms at the longest setting.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
@@ -410,13 +453,16 @@ The current evidence supports a cautious statement:
 > Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and generally stronger random key-value retrieval than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
 
 Copy and needle are the cleanest synthetic evidence so far: per-token memory
-preserves exact details far better than the current recurrent memory design.
-Changing recurrent slot allocation and adding a last-token update did not fix
-the collapse. The KV probes also show that task design matters: identity
-retrieval is solved, but shifted and random binding remain difficult for these
-small models.
+preserves exact details far better than the recurrent memory designs tested
+here. Changing recurrent slot allocation, adding a last-token update, and adding
+explicit associative read/write do not solve the long-range exact-recall
+collapse. Associative memory helps short copy and slightly helps copy length 32,
+but not needle or long copy. The KV probes also show that task design matters:
+identity retrieval is solved, but shifted and random binding remain difficult
+for these small models.
 
 Next useful experiments:
 
-1. Explore more substantial recurrent redesigns, not just update variants.
-2. Run one larger 30M-50M matched-budget configuration if compute allows.
+1. Finish associative KV retrieval and shape sweeps.
+2. Add memory normalization/clipping or a true fast-weight/outer-product recurrent variant.
+3. Run larger WikiText configs to replicate the scaled TinyStories result on a second dataset.

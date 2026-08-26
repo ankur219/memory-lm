@@ -100,6 +100,22 @@ def test_associative_recurrent_updates_values_not_keys_per_sequence():
     torch.testing.assert_close(model.memory_read_keys.detach(), keys_before)
 
 
+def test_associative_memory_clip_bounds_slot_norms():
+    cfg = tiny_config(num_memory_tokens=4, recurrent_memory_dim=32, chunk_size=4, assoc_memory_clip=1.5)
+    model = AssociativeRecurrentMemoryTransformer(cfg)
+    out = model(torch.randint(0, 64, (2, 12)))
+    slot_norms = out["memory"].norm(dim=-1)
+    assert slot_norms.max().item() <= 1.5001
+
+
+def test_associative_memory_norm_sets_unit_rms():
+    cfg = tiny_config(num_memory_tokens=4, recurrent_memory_dim=32, chunk_size=4, assoc_memory_norm=True)
+    model = AssociativeRecurrentMemoryTransformer(cfg)
+    out = model(torch.randint(0, 64, (2, 12)))
+    rms = out["memory"].pow(2).mean(dim=-1).sqrt()
+    torch.testing.assert_close(rms, torch.ones_like(rms), atol=1e-4, rtol=1e-4)
+
+
 def test_recurrent_memory_update_gets_gradients_across_chunks():
     cfg = tiny_config(num_memory_tokens=4, recurrent_memory_dim=48, chunk_size=4)
     model = RecurrentMemoryTransformer(cfg)

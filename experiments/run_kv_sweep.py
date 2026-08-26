@@ -73,6 +73,8 @@ def make_config(
     num_pairs: int,
     vocab_size: int,
     recurrent_shape: tuple[int, int] | None = None,
+    assoc_memory_norm: bool = False,
+    assoc_memory_clip: float | None = None,
 ) -> TransformerConfig:
     seq_len = 2 * num_pairs + 5
     context_length = max(32, seq_len)
@@ -91,6 +93,8 @@ def make_config(
         recurrent_compressed_attention=True,
         recurrent_learned_initial=False,
         recurrent_update_style="cross_attention",
+        assoc_memory_norm=assoc_memory_norm,
+        assoc_memory_clip=assoc_memory_clip,
         chunk_size=32,
     )
     if model_name == "recurrent":
@@ -166,7 +170,14 @@ def train_one(model_name: str, num_pairs: int, args, recurrent_shape: tuple[int,
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
 
-    cfg = make_config(model_name, num_pairs, train_val.vocab.size, recurrent_shape=recurrent_shape)
+    cfg = make_config(
+        model_name,
+        num_pairs,
+        train_val.vocab.size,
+        recurrent_shape=recurrent_shape,
+        assoc_memory_norm=args.assoc_memory_norm,
+        assoc_memory_clip=args.assoc_memory_clip,
+    )
     shape_label = (
         f"{cfg.num_memory_tokens}x{cfg.recurrent_memory_dim}"
         if model_name in {"recurrent", "assoc_recurrent"}
@@ -212,6 +223,8 @@ def train_one(model_name: str, num_pairs: int, args, recurrent_shape: tuple[int,
     return {
         "model": model_name,
         "recurrent_shape": shape_label,
+        "assoc_memory_norm": cfg.assoc_memory_norm if model_name == "assoc_recurrent" else "",
+        "assoc_memory_clip": cfg.assoc_memory_clip if model_name == "assoc_recurrent" else "",
         "num_pairs": num_pairs,
         "sequence_length": seq_len,
         "steps": args.steps,
@@ -273,6 +286,18 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--answer-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--assoc-memory-norm",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Apply RMS normalization after each associative recurrent memory write.",
+    )
+    parser.add_argument(
+        "--assoc-memory-clip",
+        type=float,
+        default=None,
+        help="Optionally clip each associative memory slot to this L2 norm after writes.",
+    )
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument(
         "--supervise-all-tokens",

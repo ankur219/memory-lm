@@ -116,7 +116,26 @@ class AssociativeRecurrentMemoryTransformer(nn.Module):
         candidate = torch.matmul(weights, token_values)
         gate = torch.sigmoid(self.write_gate(torch.cat([memory_values, candidate], dim=-1)))
         new_memory = memory_values * (1.0 - gate) + candidate * gate
+        new_memory = self._stabilize_memory(new_memory)
         return new_memory, weights
+
+    def _stabilize_memory(self, memory_values: torch.Tensor) -> torch.Tensor:
+        """Optionally normalize or clip recurrent memory values.
+
+        The first associative probe showed very large value norms on long copy.
+        These controls let us test whether that failure is mostly numerical
+        instability, without changing the explicit read/write mechanism.
+        """
+
+        if self.config.assoc_memory_norm:
+            rms = memory_values.pow(2).mean(dim=-1, keepdim=True).add(1e-6).sqrt()
+            memory_values = memory_values / rms
+        if self.config.assoc_memory_clip is not None:
+            max_norm = float(self.config.assoc_memory_clip)
+            norm = memory_values.norm(dim=-1, keepdim=True).clamp_min(1e-6)
+            scale = (max_norm / norm).clamp_max(1.0)
+            memory_values = memory_values * scale
+        return memory_values
 
     def _run_chunk(self, token_embeddings: torch.Tensor, memory_values: torch.Tensor):
         x, read_weights = self._read_memory(token_embeddings, memory_values)

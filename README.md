@@ -364,6 +364,37 @@ These CSV files include memory diagnostics where available:
 `read_entropy`, `write_entropy`, `memory_delta_norm`, and
 `memory_value_norm`.
 
+If associative memory values become unstable, test the stabilized variant:
+
+```bash
+python3 experiments/run_copy_sweep.py \
+  --lengths 16 32 64 \
+  --models assoc_recurrent \
+  --recurrent-shapes 256x128 \
+  --assoc-memory-norm \
+  --assoc-memory-clip 16 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --csv-path logs/copy_assoc_recurrent_stabilized.csv
+```
+
+```bash
+python3 experiments/run_needle_sweep.py \
+  --gaps 16 32 64 \
+  --models assoc_recurrent \
+  --recurrent-shapes 256x128 \
+  --assoc-memory-norm \
+  --assoc-memory-clip 16 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --answer-loss-weight 10 \
+  --csv-path logs/needle_assoc_recurrent_stabilized.csv
+```
+
 Real-data runs also save checkpoints every 5000 steps and at the end:
 
 ```text

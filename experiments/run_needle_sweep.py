@@ -72,6 +72,8 @@ def make_config(
     vocab_size: int,
     recurrent_update_style: str = "cross_attention",
     recurrent_shape: tuple[int, int] | None = None,
+    assoc_memory_norm: bool = False,
+    assoc_memory_clip: float | None = None,
 ) -> TransformerConfig:
     cfg = TransformerConfig(
         vocab_size=vocab_size,
@@ -88,6 +90,8 @@ def make_config(
         recurrent_compressed_attention=True,
         recurrent_learned_initial=False,
         recurrent_update_style=recurrent_update_style,
+        assoc_memory_norm=assoc_memory_norm,
+        assoc_memory_clip=assoc_memory_clip,
         chunk_size=32,
     )
     if model_name == "recurrent":
@@ -150,6 +154,8 @@ def train_one(model_name: str, gap_length: int, args, recurrent_shape: tuple[int
         train_val.vocab_size,
         recurrent_update_style=args.recurrent_update_style,
         recurrent_shape=recurrent_shape,
+        assoc_memory_norm=args.assoc_memory_norm,
+        assoc_memory_clip=args.assoc_memory_clip,
     )
     shape_label = (
         f"{cfg.num_memory_tokens}x{cfg.recurrent_memory_dim}"
@@ -196,6 +202,8 @@ def train_one(model_name: str, gap_length: int, args, recurrent_shape: tuple[int
         "model": model_name,
         "recurrent_shape": shape_label,
         "recurrent_update_style": cfg.recurrent_update_style if model_name == "recurrent" else "",
+        "assoc_memory_norm": cfg.assoc_memory_norm if model_name == "assoc_recurrent" else "",
+        "assoc_memory_clip": cfg.assoc_memory_clip if model_name == "assoc_recurrent" else "",
         "gap_length": gap_length,
         "sequence_length": sequence_length,
         "steps": args.steps,
@@ -257,6 +265,18 @@ def main() -> None:
         choices=["mean_gru", "cross_attention", "last_tokens"],
         default="cross_attention",
         help="Only applies to the naive recurrent model. assoc_recurrent uses explicit associative read/write.",
+    )
+    parser.add_argument(
+        "--assoc-memory-norm",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Apply RMS normalization after each associative recurrent memory write.",
+    )
+    parser.add_argument(
+        "--assoc-memory-clip",
+        type=float,
+        default=None,
+        help="Optionally clip each associative memory slot to this L2 norm after writes.",
     )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)

@@ -35,6 +35,8 @@ class TransformerConfig:
     recurrent_learned_initial: bool = False
     per_layer_memory: bool = False
     recurrent_update_style: str = "mean_gru"
+    assoc_memory_norm: bool = False
+    assoc_memory_clip: Optional[float] = None
     param_padding: int = 0
     chunk_size: int = 128
 

@@ -246,6 +246,35 @@ Interpretation: associative recurrent memory does not improve random key-value
 retrieval. It is slightly worse than naive recurrent at all tested pair counts,
 despite using the same persistent-memory budget and more parameters.
 
+### Associative Recurrent Random KV With Write Normalization
+
+Status: single-seed probe; not a final claim.
+
+This run tests whether RMS-normalizing the token states before associative
+write-key/write-value projections improves random key-value retrieval. The
+memory budget and `256x128` shape are unchanged.
+
+Result:
+
+| Pairs | Assoc raw | Assoc write-norm |
+|---:|---:|---:|
+| 4 | 0.314 | 0.314 |
+| 8 | 0.222 | 0.222 |
+| 16 | 0.121 | 0.107 |
+
+Diagnostics:
+
+| Pairs | Params | Mem Floats | Read Entropy | Write Entropy | Token Out Norm | Write Source Norm | Candidate Norm | Value Norm |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 4 | 628,736 | 32,768 | 5.545 | 2.565 | 213.186 | 11.314 | 0.791 | 0.395 |
+| 8 | 628,736 | 32,768 | 5.545 | 3.045 | 546.101 | 11.314 | 0.963 | 0.482 |
+| 16 | 628,736 | 32,768 | 5.531 | 2.198 | 177.866 | 9.523 | 5.253 | 1.562 |
+
+Interpretation: write-side normalization controls the write-source magnitude,
+but it does not improve random key-value retrieval. The normalization benefit
+seen later on needle gap 32 is therefore task-specific, not a general KV
+retrieval improvement.
+
 ## Synthetic Copy
 
 The copy task tests exact token preservation:
@@ -359,6 +388,59 @@ slightly improves length 32, but it does not solve long exact copying. At
 length 64 the associative memory values become unstable, with very large update
 and value norms. This argues for adding memory normalization or clipping before
 running associative memory on real text.
+
+### Associative Copy With Write Normalization
+
+Status: single-seed probe; copy-64 evaluation is high-resolution because it
+scores 195,000 copied-token predictions.
+
+This run adds RMSNorm before the associative write-key/write-value projections.
+The model is trained from scratch with normalization enabled.
+
+Result:
+
+| Copy Length | Assoc raw | Assoc write-norm |
+|---:|---:|---:|
+| 16 | 0.998 | 0.941 |
+| 32 | 0.064 | 0.053 |
+| 64 | 0.023 | 0.023 |
+
+Diagnostics:
+
+| Copy Length | Params | Mem Floats | Write Entropy | Token Out Norm | Write Source Norm | Candidate Norm | Value Norm |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 632,832 | 32,768 | 1.920 | 115.108 | 11.039 | 8.392 | 7.727 |
+| 32 | 632,832 | 32,768 | 1.875 | 31.749 | 10.221 | 7.582 | 3.302 |
+| 64 | 632,832 | 32,768 | 2.911 | 732.752 | 11.304 | 17.753 | 24.025 |
+
+Interpretation: write-normalization reduces the magnitude problem, but does
+not improve dense exact copying. This suggests the copy failure is primarily a
+multi-item capacity/allocation problem rather than only a write-scale problem.
+
+### Copy-64 With 2x Few-Rich Budget
+
+Status: single-seed probe; parameter confound explicitly measured.
+
+This run doubles the few-rich persistent memory from `256x128` to `512x128`
+while keeping the memory dimension equal to the hidden size. The associative
+variant is raw associative memory, without write normalization or clipping, so
+the isolated variable is the number of memory slots.
+
+Result:
+
+| Model | Shape | Params | Mem Floats | Copy-64 Accuracy |
+|---|---|---:|---:|---:|
+| Naive recurrent | 256x128 | 471,936 | 32,768 | 0.031 |
+| Assoc recurrent | 256x128 | 632,704 | 32,768 | 0.023 |
+| Naive recurrent | 512x128 | 471,936 | 65,536 | 0.031 |
+| Assoc recurrent | 512x128 | 698,240 | 65,536 | 0.023 |
+
+Interpretation: doubling few-rich memory does not improve dense exact copy for
+either recurrent variant. Since copy accuracy is measured over many copied
+tokens, this is not just a coarse-evaluation artifact. The associative model has
+more learned parameters than naive recurrent, and the parameter gap widens from
++160,768 at `256x128` to +226,304 at `512x128`, because fixed associative
+read/write slot parameters scale with the number of slots.
 
 ### Last-Token Recurrent Update
 
@@ -493,23 +575,89 @@ Interpretation: associative recurrent memory does not fix needle recall. Both
 models solve gap 16 and collapse at gaps 32-64. The associative model again
 shows larger memory value/update norms at the longest setting.
 
+### Associative Needle With Write Normalization
+
+Status: single-seed probe; needle-32 needs a seed check before becoming a
+paper claim.
+
+This run adds RMSNorm before the associative write-key/write-value projections.
+The model is trained from scratch with normalization enabled.
+
+Result:
+
+| Gap Length | Assoc raw | Assoc write-norm |
+|---:|---:|---:|
+| 16 | 1.000 | 1.000 |
+| 32 | 0.014 | 0.591 |
+| 64 | 0.015 | 0.015 |
+
+Diagnostics:
+
+| Gap Length | Params | Mem Floats | Write Entropy | Token Out Norm | Write Source Norm | Candidate Norm | Value Norm |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 641,024 | 32,768 | 3.401 | 40.541 | 11.314 | 1.698 | 0.845 |
+| 32 | 641,024 | 32,768 | 2.959 | 98.935 | 10.192 | 6.832 | 2.433 |
+| 64 | 641,024 | 32,768 | 2.586 | 164.866 | 10.027 | 3.976 | 2.115 |
+
+Interpretation: write normalization substantially improves medium-range
+single-fact retrieval at gap 32, but it does not help gap 64. This separates
+needle from copy: needle requires preserving one salient fact among distractors,
+where cleaner writes can reduce interference, while copy requires preserving
+many exact token identities simultaneously.
+
+### Needle-64 With 2x Few-Rich Budget
+
+Status: single-seed probe; suggestive but confounded by parameter count.
+
+This run doubles the few-rich persistent memory from `256x128` to `512x128`.
+The associative variant is raw associative memory, without write normalization
+or clipping.
+
+Result:
+
+| Model | Shape | Params | Mem Floats | Needle-64 Accuracy |
+|---|---|---:|---:|---:|
+| Naive recurrent | 512x128 | 480,128 | 65,536 | 0.013 |
+| Assoc recurrent | 512x128 | 706,432 | 65,536 | 0.227 |
+
+Interpretation: associative addressing captures more signal than naive
+recurrent pooling on needle-64 when the few-rich memory budget is doubled.
+However, this is not yet a clean equal-parameter result: the associative model
+has +226,304 parameters relative to naive recurrent at this shape, including
+extra learned read/write slot parameters. An equal-parameter follow-up, such as
+padding naive recurrent or narrowing the associative read/write parameterization,
+would be needed before stating this as a clean mechanism result.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and generally stronger random key-value retrieval than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
+> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger exact multi-item recall than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
 
 Copy and needle are the cleanest synthetic evidence so far: per-token memory
 preserves exact details far better than the recurrent memory designs tested
 here. Changing recurrent slot allocation, adding a last-token update, and adding
-explicit associative read/write do not solve the long-range exact-recall
-collapse. Associative memory helps short copy and slightly helps copy length 32,
-but not needle, long copy, or random key-value retrieval. The KV probes also
-show that task design matters: identity retrieval is solved, but shifted and
-random binding remain difficult for these small models.
+explicit associative read/write do not solve dense long-range exact copy.
+Associative memory helps short copy, slightly helps copy length 32, and with
+write normalization strongly improves needle gap 32, but it does not improve
+copy length 64 or random KV retrieval. Doubling few-rich memory also fails to
+move copy length 64, while raw associative memory improves needle gap 64 under
+2x memory with a known parameter-count confound.
+
+The emerging distinction is:
+
+- Dense exact recall, such as copy, stresses many simultaneous token identities.
+  Spreading the same memory budget across token-indexed slots remains much
+  stronger than concentrating it into recurrent slots.
+- Single-fact retrieval, such as needle, can benefit from cleaner or more
+  structured associative writes, but the strongest positive numbers are still
+  single-seed probes and need seed confirmation.
 
 Next useful experiments:
 
-1. Run associative shape sweeps.
-2. Add memory normalization/clipping or a true fast-weight/outer-product recurrent variant.
-3. Run larger WikiText configs to replicate the scaled TinyStories result on a second dataset.
+1. Seed-check needle gap 32 with write normalization.
+2. Seed-check needle gap 64 with 2x raw associative memory.
+3. Decide whether to run an equal-parameter 2x associative comparison or leave
+   the parameter delta as a stated limitation.
+4. Consider a true fast-weight/outer-product recurrent variant only after the
+   seed checks clarify whether the associative gains are robust.

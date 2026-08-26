@@ -27,24 +27,27 @@ checkpoint.
 1. Run the 35M recurrent `512x512` shape checks on WikiText and TinyStories.
    The original 35M recurrent configs use 8 very wide slots; `512x512` keeps
    the same memory-float and parameter budget with many more, narrower slots.
-2. Check whether the 7M WikiText recurrent config needs the same shape-fairness
-   correction.
-   The current 7M config also uses a wide-slot shape, so any scale-trend claim
-   should be re-derived after the recurrent shape issue is controlled.
-3. Add one strong published recurrent baseline.
+2. Add one strong published recurrent baseline.
    Prefer RMT or Key-Value Means if it can be reproduced cleanly under the same
    tokenizer, dataset, context length, and memory-accounting rules.
-4. Test longer sequence lengths.
-   Add at least 512, 1024, and 2048-token settings for the memory tasks and/or
-   real-text evaluation so the benchmark stresses long-range memory rather than
-   only context 128.
-5. Build a memory-budget curve.
+3. Build a memory-budget curve.
    Compare baseline/per-token/recurrent at multiple persistent-memory budgets
    such as 1x, 1/2x, 1/4x, and 1/8x of full KV memory. This should become a main
    figure if it is clean.
-6. Record the recurrent-shape and budget-curve results in `RESULTS.md`.
+4. Run multi-seed checks for the central results.
+   Report mean and variance for the main real-data and synthetic comparisons
+   that become load-bearing paper claims.
+5. Test longer sequence lengths.
+   Add at least 512, 1024, and 2048-token settings for the memory tasks and/or
+   real-text evaluation so the benchmark stresses long-range memory rather than
+   only context 128.
+6. Check whether the 7M WikiText recurrent config needs the same shape-fairness
+   correction.
+   The current 7M config also uses a wide-slot shape, so any scale-trend claim
+   should be re-derived after the recurrent shape issue is controlled.
+7. Record the recurrent-shape, baseline, budget-curve, and multi-seed results in `RESULTS.md`.
    Keep the research log synchronized with completed runs.
-7. Optional: run one additional large-scale recurrent shape point.
+8. Optional: run one additional large-scale recurrent shape point.
    This can check whether `512x512` is near-best or merely better than the
    original `8x32768` shape.
 
@@ -54,9 +57,9 @@ evidence reopens it.
 
 ### Paper
 
-1. Begin the paper outline around the robust result: many-small per-token
-   memory is a stronger default for exact detail retention under matched memory
-   budget than the few-rich recurrent variants tested here.
+1. Begin the paper outline around the central question: under a fixed memory
+   budget, should capacity be allocated across many token-specific states or
+   fewer compressed recurrent states?
 2. Write the capacity-style argument.
    Explain why spreading memory across token-indexed slots may preserve exact
    detail better than concentrating the same budget into recurrent slots.
@@ -65,8 +68,9 @@ evidence reopens it.
    TransformerFAM, Memorizing Transformers, Infini-Transformer, Key-Value
    Means, Melodi, and related recurrent-memory work.
 4. Create the core figures and tables.
-   Start with the real-data loss table, copy/needle accuracy-vs-length plots,
-   and a memory-budget allocation diagram.
+   Start with the memory-budget curve, real-data loss table,
+   copy/needle accuracy-vs-length plots, throughput table, and a memory-budget
+   allocation diagram.
 5. Decide how much of the associative-memory arc belongs in the main paper
    versus an appendix.
    It is useful evidence, but it is long and should not crowd the central

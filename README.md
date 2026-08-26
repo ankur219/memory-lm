@@ -50,6 +50,11 @@ checkpoint.
 8. Optional: run one additional large-scale recurrent shape point.
    This can check whether `512x512` is near-best or merely better than the
    original `8x32768` shape.
+9. Stretch: decide whether to run a 100M-150M scale point.
+   Do this only after the recurrent shape check, published recurrent baseline,
+   longer-context setup, and memory-budget curve are in place. This is mainly
+   for keeping COLM/ICLR main-track ambitions alive, not for the near-term
+   TMLR/workshop version.
 
 Deliberately not planned for now: fast-weight or outer-product memory. The
 associative recurrent branch is treated as a negative result unless later
@@ -82,11 +87,12 @@ evidence reopens it.
 ### Venue Direction
 
 - TMLR is a strong fit if the final paper emphasizes soundness, careful matched
-  budgets, and negative results.
+  budgets, and negative results at the current 35M scale.
 - ICLR/COLM 2027 workshops remain good lower-friction targets for an
   LLM-memory-focused audience.
 - Main-track ICLR/NeurIPS is a stretch unless the project adds an external
-  baseline such as RMT or ARMT reproduced inside this harness.
+  baseline such as RMT or ARMT reproduced inside this harness, longer-context
+  evaluations, memory-budget curves, and likely a 100M-150M scale point.
 
 ## Repository Layout
 

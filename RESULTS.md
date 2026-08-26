@@ -101,6 +101,45 @@ Interpretation:
 - Recurrent few-rich is worse than per-token on validation loss, but runs much faster than per-token.
 - The ordering matches TinyStories: baseline best, per-token close behind, recurrent worse.
 
+## Larger WikiText-103 Full Validation
+
+Setup:
+
+- Dataset: full WikiText-103 train split, `Salesforce/wikitext`, `wikitext-103-raw-v1`.
+- Validation: full WikiText-103 validation split.
+- Tokenizer: GPT-2 `tiktoken`.
+- Train tokens per model: 119,085,056 processed from a 119,085,170-token cache.
+- Validation tokens: 249,751-token cache, evaluated in 21 batches.
+- Context length: 128.
+- Batch size: 96.
+- Model scale: 35M-38M parameters.
+- Memory-compressed variants use 262,144 persistent memory floats.
+
+Command:
+
+```bash
+python3 experiments/run_large_wikitext_comparison.py
+python3 experiments/summarize_large_wikitext_comparison.py
+```
+
+Result:
+
+| Model | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
+|---|---:|---:|---:|---:|---:|---:|
+| Baseline | 3.6202 | 37.35 | 33.6k | 14,205 MB | 38,179,584 | 786,432 |
+| Per-token many-small | 3.6831 | 39.77 | 34.1k | 16,052 MB | 35,431,680 | 262,144 |
+| Recurrent few-rich | 3.7973 | 44.58 | 34.8k | 14,890 MB | 35,431,680 | 262,144 |
+
+Interpretation:
+
+- The larger WikiText run matches the larger TinyStories ordering: baseline
+  best, per-token many-small next, recurrent few-rich worst.
+- Among matched compressed-memory models, per-token many-small again has better
+  validation loss than recurrent few-rich with the same parameter count,
+  training tokens, context length, tokenizer, optimizer settings, and persistent
+  memory budget.
+- This is the strongest real-data replication so far of the core result.
+
 ## Synthetic KV Retrieval
 
 The synthetic task tests exact retrieval:
@@ -697,7 +736,6 @@ Next useful experiments:
    result or invest in a more stable training/update mechanism.
 2. If continuing few-rich memory, prioritize a genuinely different mechanism,
    such as fast-weight/outer-product memory, rather than more pooling variants.
-3. Run 35M WikiText if a second large-scale real-data replication is needed.
-4. Begin the paper outline around the robust result: many-small per-token memory
+3. Begin the paper outline around the robust result: many-small per-token memory
    is a stronger default for exact detail retention under matched memory budget
    than the few-rich recurrent variants tested here.

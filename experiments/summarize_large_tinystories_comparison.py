@@ -30,6 +30,7 @@ def main():
         "Baseline": "large_tinystories_baseline.jsonl",
         "Per-Token (Many-Small)": "large_tinystories_per_token.jsonl",
         "Recurrent (Few-Rich)": "large_tinystories_recurrent.jsonl",
+        "Recurrent (Many-Slot, 512x512)": "large_tinystories_recurrent_512x512.jsonl",
     }
 
     rows = []

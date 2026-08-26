@@ -1,0 +1,71 @@
+task: real_lm
+seed: 0
+model_name: recurrent
+device: auto
+batch_size: 96
+learning_rate: 0.0003
+weight_decay: 0.01
+grad_clip: 1.0
+max_steps:
+num_epochs: 1
+eval_every: 500
+eval_max_batches: 100
+final_eval_max_batches:
+block_stride:
+log_path: logs/large_wikitext_recurrent_512x512.jsonl
+csv_path: logs/large_wikitext_recurrent_512x512.csv
+checkpoint_dir: checkpoints/large_wikitext_recurrent_512x512
+save_every: 0
+generation:
+  enabled: true
+  prompt: "The history of science"
+  max_new_tokens: 80
+  every_steps: 1000
+  print_at_step_one: false
+  temperature: 0.8
+  top_k: 50
+tokenizer:
+  kind: tiktoken
+  encoding: gpt2
+  cache_dir: data/tiktoken_cache
+data:
+  source: hf_text
+  dataset_name: Salesforce/wikitext
+  dataset_config: wikitext-103-raw-v1
+  text_field: text
+  split: train
+  cache_dir: data/hf_cache
+  cache_tokens: true
+  token_cache_dir: data/token_cache
+  offline: false
+  max_examples:
+  max_chars:
+validation_data:
+  source: hf_text
+  dataset_name: Salesforce/wikitext
+  dataset_config: wikitext-103-raw-v1
+  text_field: text
+  split: validation
+  cache_dir: data/hf_cache
+  token_cache_dir: data/token_cache
+  offline: false
+  max_examples:
+  max_chars:
+model:
+  vocab_size: 257
+  hidden_size: 384
+  num_layers: 8
+  num_heads: 8
+  context_length: 128
+  mlp_ratio: 4.0
+  dropout: 0.0
+  tie_embeddings: true
+  memory_dim: 128
+  num_memory_tokens: 512
+  recurrent_memory_dim: 512
+  recurrent_update_rank: 4
+  recurrent_compressed_attention: true
+  recurrent_learned_initial: false
+  recurrent_update_style: "cross_attention"
+  param_padding: 387072
+  chunk_size: 64

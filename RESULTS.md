@@ -65,6 +65,9 @@ Interpretation:
 - Among matched compressed-memory models, per-token many-small is substantially better than recurrent few-rich.
 - Per-token and recurrent used the same training tokens, parameter count, and persistent-memory budget.
 - Different batch sizes mean throughput should not be over-interpreted in this row.
+- Caveat: this recurrent row uses `8x32768` memory, an extreme few-giant-slots
+  shape. A matched-budget `512x512` recurrent shape check is needed before
+  treating this as the strongest recurrent baseline.
 
 ## WikiText-103 Full Validation
 
@@ -138,7 +141,9 @@ Interpretation:
   validation loss than recurrent few-rich with the same parameter count,
   training tokens, context length, tokenizer, optimizer settings, and persistent
   memory budget.
-- This is the strongest real-data replication so far of the core result.
+- Caveat: this recurrent row uses `8x32768` memory, an extreme few-giant-slots
+  shape. A matched-budget `512x512` recurrent shape check is needed before
+  treating this as the strongest recurrent baseline.
 
 ## Synthetic KV Retrieval
 

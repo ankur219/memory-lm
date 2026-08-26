@@ -30,6 +30,7 @@ def main():
         "Baseline": "large_wikitext_baseline.jsonl",
         "Per-Token (Many-Small)": "large_wikitext_per_token.jsonl",
         "Recurrent (Few-Rich)": "large_wikitext_recurrent.jsonl",
+        "Recurrent (Many-Slot, 512x512)": "large_wikitext_recurrent_512x512.jsonl",
     }
 
     rows = []

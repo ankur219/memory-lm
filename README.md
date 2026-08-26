@@ -22,9 +22,10 @@ checkpoint.
 
 ## Current TODOs
 
-1. Run the larger WikiText configs.
-   This checks whether the 35M-scale TinyStories result generalizes beyond TinyStories.
-2. Record the larger WikiText result in `RESULTS.md`.
+1. Run the 35M recurrent `512x512` shape checks.
+   The original 35M recurrent configs use 8 very wide slots; `512x512` keeps
+   the same memory-float and parameter budget with many more, narrower slots.
+2. Record the recurrent-shape results in `RESULTS.md`.
    Keep the research log synchronized with completed runs.
 3. Begin the paper outline.
    Turn the current robust result into a paper-shaped argument before adding more mechanisms.
@@ -304,6 +305,16 @@ cd memory-lm
 python3 experiments/summarize_large_tinystories_comparison.py
 ```
 
+The original large recurrent config uses 8 very wide slots. To check whether
+that shape is unfairly weak, run the matched-budget and parameter-matched
+many-slot recurrent variant:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_tinystories_recurrent_shape_check.py > large_tinystories_recurrent_512x512.out 2>&1 &
+tail -f large_tinystories_recurrent_512x512.out
+```
+
 ## Larger WikiText-103 Comparison
 
 After the larger TinyStories run, use the larger WikiText configs to test
@@ -334,6 +345,16 @@ Summarize after completion:
 ```bash
 cd memory-lm
 python3 experiments/summarize_large_wikitext_comparison.py
+```
+
+The original large recurrent config uses 8 very wide slots. To check whether
+that shape is unfairly weak, run the matched-budget and parameter-matched
+many-slot recurrent variant:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_wikitext_recurrent_shape_check.py > large_wikitext_recurrent_512x512.out 2>&1 &
+tail -f large_wikitext_recurrent_512x512.out
 ```
 
 ## Associative Recurrent Synthetic Probe

@@ -115,9 +115,15 @@ class AssociativeRecurrentMemoryTransformer(nn.Module):
         weights = F.softmax(scores, dim=-1)
         candidate = torch.matmul(weights, token_values)
         gate = torch.sigmoid(self.write_gate(torch.cat([memory_values, candidate], dim=-1)))
-        new_memory = memory_values * (1.0 - gate) + candidate * gate
-        new_memory = self._stabilize_memory(new_memory)
-        return new_memory, weights
+        raw_memory = memory_values * (1.0 - gate) + candidate * gate
+        new_memory = self._stabilize_memory(raw_memory)
+        write_diagnostics = {
+            "token_out_norm": float(token_out.norm(dim=-1).mean().detach().cpu()),
+            "write_value_norm": float(token_values.norm(dim=-1).mean().detach().cpu()),
+            "candidate_norm": float(candidate.norm(dim=-1).mean().detach().cpu()),
+            "raw_memory_norm": float(raw_memory.norm(dim=-1).mean().detach().cpu()),
+        }
+        return new_memory, weights, write_diagnostics
 
     def _stabilize_memory(self, memory_values: torch.Tensor) -> torch.Tensor:
         """Optionally normalize or clip recurrent memory values.
@@ -143,12 +149,13 @@ class AssociativeRecurrentMemoryTransformer(nn.Module):
         for layer in self.layers:
             x, cache = layer(x, self.rope_cos, self.rope_sin)
             caches.append(cache)
-        new_memory, write_weights = self._write_memory(x, memory_values)
+        new_memory, write_weights, write_diagnostics = self._write_memory(x, memory_values)
         diagnostics = {
             "read_entropy": float(_attention_entropy(read_weights).detach().cpu()),
             "write_entropy": float(_attention_entropy(write_weights).detach().cpu()),
             "memory_delta_norm": float((new_memory - memory_values).norm(dim=-1).mean().detach().cpu()),
             "memory_value_norm": float(new_memory.norm(dim=-1).mean().detach().cpu()),
+            **write_diagnostics,
         }
         return x, new_memory, caches, diagnostics
 

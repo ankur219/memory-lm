@@ -362,7 +362,8 @@ python3 experiments/run_kv_sweep.py \
 
 These CSV files include memory diagnostics where available:
 `read_entropy`, `write_entropy`, `memory_delta_norm`, and
-`memory_value_norm`.
+`memory_value_norm`. Associative runs also log upstream write diagnostics:
+`token_out_norm`, `write_value_norm`, `candidate_norm`, and `raw_memory_norm`.
 
 If associative memory values become unstable, test the stabilized variant:
 

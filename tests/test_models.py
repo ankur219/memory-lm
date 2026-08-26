@@ -89,6 +89,8 @@ def test_associative_recurrent_memory_shape_and_diagnostics():
     assert out["memory"].shape == (2, 7, 32)
     assert out["diagnostics"]["read_entropy"] > 0
     assert out["diagnostics"]["write_entropy"] > 0
+    assert out["diagnostics"]["candidate_norm"] > 0
+    assert out["diagnostics"]["raw_memory_norm"] > 0
 
 
 def test_associative_recurrent_updates_values_not_keys_per_sequence():

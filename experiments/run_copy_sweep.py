@@ -225,6 +225,10 @@ def collect_diagnostics(model, dataloader, device: torch.device) -> dict:
         "write_entropy": diagnostics.get("write_entropy", ""),
         "memory_delta_norm": diagnostics.get("memory_delta_norm", ""),
         "memory_value_norm": diagnostics.get("memory_value_norm", ""),
+        "token_out_norm": diagnostics.get("token_out_norm", ""),
+        "write_value_norm": diagnostics.get("write_value_norm", ""),
+        "candidate_norm": diagnostics.get("candidate_norm", ""),
+        "raw_memory_norm": diagnostics.get("raw_memory_norm", ""),
     }
 
 

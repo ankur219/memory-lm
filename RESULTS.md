@@ -444,10 +444,14 @@ Diagnostics:
 
 Interpretation: doubling few-rich memory does not improve dense exact copy for
 either recurrent variant. Since copy accuracy is measured over many copied
-tokens, this is not just a coarse-evaluation artifact. The associative model has
-more learned parameters than naive recurrent, and the parameter gap widens from
-+160,768 at `256x128` to +226,304 at `512x128`, because fixed associative
-read/write slot parameters scale with the number of slots.
+tokens, this is not just a coarse-evaluation artifact. The naive recurrent
+diagnostic gives a more specific mechanism: write entropy is `0.693`, about
+`ln(2)`, so the model is effectively writing to roughly two slots out of the
+512 available. In this run, extra few-rich slots did not help because the model
+did not learn to use them. The associative model has more learned parameters
+than naive recurrent, and the parameter gap widens from +160,768 at `256x128`
+to +226,304 at `512x128`, because fixed associative read/write slot parameters
+scale with the number of slots.
 
 ### Last-Token Recurrent Update
 
@@ -640,7 +644,11 @@ However, this is not yet a clean equal-parameter result: the associative model
 has +226,304 parameters relative to naive recurrent at this shape, including
 extra learned read/write slot parameters. An equal-parameter follow-up, such as
 padding naive recurrent or narrowing the associative read/write parameterization,
-would be needed before stating this as a clean mechanism result.
+would be needed before stating this as a clean mechanism result. The read
+entropy is also `6.238`, close to `ln(512)`, so this should not yet be
+interpreted as sharp content-addressed lookup of one slot. The improvement may
+come from broad averaging or redundant traces across many slots rather than
+precise associative retrieval.
 
 ## Current Takeaway
 

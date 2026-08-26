@@ -30,6 +30,42 @@ Interpretation:
 - Recurrent few-rich is faster and uses much less peak VRAM than per-token, but has worse loss.
 - Cross-attention recurrent did not improve over the simpler mean-GRU update in this run.
 
+## Larger TinyStories Full Validation
+
+Setup:
+
+- Dataset: full TinyStories train split.
+- Validation: full official TinyStories validation split.
+- Tokenizer: GPT-2 `tiktoken`.
+- Train tokens per model: 473,992,192.
+- Validation tokens: 4,765,824.
+- Context length: 128.
+- Model scale: 35M-38M parameters.
+- Memory-compressed variants use 262,144 persistent memory floats.
+- Baseline ran with batch size 128; per-token and recurrent ran with batch size 96 due to per-token VRAM limits.
+
+Command:
+
+```bash
+python3 experiments/run_large_tinystories_comparison.py
+python3 experiments/summarize_large_tinystories_comparison.py
+```
+
+Result:
+
+| Model | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Baseline | 1.5089 | 1.5499 | 4.71 | 41.4k | 18,791 MB | 38,179,584 | 786,432 |
+| Per-token many-small | 1.5204 | 1.5802 | 4.86 | 43.1k | 16,056 MB | 35,431,680 | 262,144 |
+| Recurrent few-rich | 1.7366 | 1.7068 | 5.51 | 43.0k | 14,907 MB | 35,431,680 | 262,144 |
+
+Interpretation:
+
+- The 7M TinyStories ordering holds at larger scale: baseline best, per-token close behind, recurrent worse.
+- Among matched compressed-memory models, per-token many-small is substantially better than recurrent few-rich.
+- Per-token and recurrent used the same training tokens, parameter count, and persistent-memory budget.
+- Different batch sizes mean throughput should not be over-interpreted in this row.
+
 ## WikiText-103 Full Validation
 
 Setup:

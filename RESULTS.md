@@ -267,6 +267,52 @@ collapse. More slots help slightly at length 32, but all shapes remain near
 chance at length 64. This suggests the current recurrent update loses exact
 sequence detail, not merely that it has too few slots.
 
+### Associative Recurrent Copy Probe
+
+This sweep compares naive recurrent memory against explicit associative
+read/write memory at the same persistent-memory budget. Both use `256x128`,
+or 32,768 persistent memory floats. The associative model has more parameters
+because it adds explicit read/write projections.
+
+Command:
+
+```bash
+python3 experiments/run_copy_sweep.py \
+  --lengths 16 32 64 \
+  --models recurrent assoc_recurrent \
+  --recurrent-shapes 256x128 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --csv-path logs/copy_assoc_recurrent.csv
+```
+
+Result:
+
+| Copy Length | Naive recurrent | Assoc recurrent |
+|---:|---:|---:|
+| 16 | 0.942 | 0.998 |
+| 32 | 0.046 | 0.064 |
+| 64 | 0.031 | 0.023 |
+
+Diagnostics:
+
+| Copy Length | Model | Params | Mem Floats | Write Entropy | Delta Norm | Value Norm |
+|---:|---|---:|---:|---:|---:|---:|
+| 16 | Naive recurrent | 471,936 | 32,768 | 1.757 | 4.822 | 8.928 |
+| 16 | Assoc recurrent | 632,704 | 32,768 | 0.831 | 26.934 | 28.218 |
+| 32 | Naive recurrent | 471,936 | 32,768 | 2.531 | 0.456 | 0.298 |
+| 32 | Assoc recurrent | 632,704 | 32,768 | 2.198 | 5.027 | 4.897 |
+| 64 | Naive recurrent | 471,936 | 32,768 | 2.764 | 1.645 | 1.641 |
+| 64 | Assoc recurrent | 632,704 | 32,768 | 2.908 | 2141.628 | 2309.025 |
+
+Interpretation: associative memory strongly improves short copy length and
+slightly improves length 32, but it does not solve long exact copying. At
+length 64 the associative memory values become unstable, with very large update
+and value norms. This argues for adding memory normalization or clipping before
+running associative memory on real text.
+
 ### Last-Token Recurrent Update
 
 This variant updates recurrent memory from the last token states in each chunk

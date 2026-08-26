@@ -22,23 +22,56 @@ checkpoint.
 
 ## Current TODOs
 
-1. Run the 35M recurrent `512x512` shape checks.
+### Experiments
+
+1. Run the 35M recurrent `512x512` shape checks on WikiText and TinyStories.
    The original 35M recurrent configs use 8 very wide slots; `512x512` keeps
    the same memory-float and parameter budget with many more, narrower slots.
-2. Record the recurrent-shape results in `RESULTS.md`.
+2. Check whether the 7M WikiText recurrent config needs the same shape-fairness
+   correction.
+   The current 7M config also uses a wide-slot shape, so any scale-trend claim
+   should be re-derived after the recurrent shape issue is controlled.
+3. Record the recurrent-shape results in `RESULTS.md`.
    Keep the research log synchronized with completed runs.
-3. Begin the paper outline.
-   Turn the current robust result into a paper-shaped argument before adding more mechanisms.
-4. Add multi-seed reporting for final tables.
-   Run 3-5 seeds for the main synthetic comparisons and any real-data comparisons used as central claims.
-5. Write a capacity-style argument.
-   Explain why many-small per-token memory may preserve exact detail better than few-rich memory under a fixed budget.
-6. Decide whether to close the associative recurrent branch.
-   Current seed checks suggest treating it as a negative result rather than running real-data associative pretraining.
-7. Write the related-work section.
-   Position against Transformer-XL, Compressive Transformer, RMT, ARMT, TransformerFAM, Infini-Transformer, Key-Value Means, Melodi, and Memorizing Transformers.
-8. Draft the arXiv/workshop paper.
-   Current target is arXiv first, then ICLR/COLM 2027 workshops if the scaled results are strong enough.
+4. Optional: run one additional large-scale recurrent shape point.
+   This can check whether `512x512` is near-best or merely better than the
+   original `8x32768` shape.
+
+Deliberately not planned for now: fast-weight or outer-product memory. The
+associative recurrent branch is treated as a negative result unless later
+evidence reopens it.
+
+### Paper
+
+1. Begin the paper outline around the robust result: many-small per-token
+   memory is a stronger default for exact detail retention under matched memory
+   budget than the few-rich recurrent variants tested here.
+2. Write the capacity-style argument.
+   Explain why spreading memory across token-indexed slots may preserve exact
+   detail better than concentrating the same budget into recurrent slots.
+3. Write the related-work section.
+   Position against Transformer-XL, Compressive Transformer, RMT, ARMT,
+   TransformerFAM, Memorizing Transformers, Infini-Transformer, Key-Value
+   Means, Melodi, and related recurrent-memory work.
+4. Create the core figures and tables.
+   Start with the real-data loss table, copy/needle accuracy-vs-length plots,
+   and a memory-budget allocation diagram.
+5. Decide how much of the associative-memory arc belongs in the main paper
+   versus an appendix.
+   It is useful evidence, but it is long and should not crowd the central
+   many-small vs few-rich result.
+6. Draft the arXiv/workshop paper.
+   Keep arXiv first; ICLR/COLM 2027 workshops and TMLR are the likely targets
+   once the shape checks and writeup are ready.
+
+### Venue Direction
+
+- TMLR is a strong fit if the final paper emphasizes soundness, careful matched
+  budgets, and negative results.
+- ICLR/COLM 2027 workshops remain good lower-friction targets for an
+  LLM-memory-focused audience.
+- Main-track ICLR/NeurIPS is a stretch unless the project adds an external
+  baseline such as RMT or ARMT reproduced inside this harness.
 
 ## Repository Layout
 

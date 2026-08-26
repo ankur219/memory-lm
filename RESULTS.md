@@ -588,8 +588,7 @@ shows larger memory value/update norms at the longest setting.
 
 ### Associative Needle With Write Normalization
 
-Status: single-seed probe; needle-32 needs a seed check before becoming a
-paper claim.
+Status: seed check completed; the positive gap-32 result is not reliable.
 
 This run adds RMSNorm before the associative write-key/write-value projections.
 The model is trained from scratch with normalization enabled.
@@ -602,6 +601,18 @@ Result:
 | 32 | 0.014 | 0.591 |
 | 64 | 0.015 | 0.015 |
 
+Seed check for gap 32:
+
+| Seed | Needle-32 Accuracy |
+|---:|---:|
+| 0 | 0.591 |
+| 1 | 0.029 |
+| 2 | 0.019 |
+| 3 | 0.999 |
+
+Across seeds 0-3, gap-32 accuracy is highly unstable rather than consistently
+improved.
+
 Diagnostics:
 
 | Gap Length | Params | Mem Floats | Write Entropy | Token Out Norm | Write Source Norm | Candidate Norm | Value Norm |
@@ -610,15 +621,14 @@ Diagnostics:
 | 32 | 641,024 | 32,768 | 2.959 | 98.935 | 10.192 | 6.832 | 2.433 |
 | 64 | 641,024 | 32,768 | 2.586 | 164.866 | 10.027 | 3.976 | 2.115 |
 
-Interpretation: write normalization substantially improves medium-range
-single-fact retrieval at gap 32, but it does not help gap 64. This separates
-needle from copy: needle requires preserving one salient fact among distractors,
-where cleaner writes can reduce interference, while copy requires preserving
-many exact token identities simultaneously.
+Interpretation: write normalization can occasionally produce strong gap-32
+needle recall, but the effect is not seed-robust in this setup. It should not
+be treated as a reliable improvement without further stabilization or a better
+training protocol.
 
 ### Needle-64 With 2x Few-Rich Budget
 
-Status: single-seed probe; suggestive but confounded by parameter count.
+Status: seed check completed; the positive seed-0 result did not replicate.
 
 This run doubles the few-rich persistent memory from `256x128` to `512x128`.
 The associative variant is raw associative memory, without write normalization
@@ -631,6 +641,18 @@ Result:
 | Naive recurrent | 512x128 | 480,128 | 65,536 | 0.013 |
 | Assoc recurrent | 512x128 | 706,432 | 65,536 | 0.227 |
 
+Seed check for `assoc_recurrent`, `512x128`:
+
+| Seed | Needle-64 Accuracy |
+|---:|---:|
+| 0 | 0.227 |
+| 1 | 0.018 |
+| 2 | 0.017 |
+| 3 | 0.015 |
+
+The 2x associative improvement is therefore a seed-0 outlier, not a robust
+effect.
+
 Diagnostics:
 
 | Model | Shape | Read Entropy | Write Entropy | Delta Norm | Value Norm | Token Out Norm | Candidate Norm |
@@ -638,17 +660,13 @@ Diagnostics:
 | Naive recurrent | 512x128 | - | 3.190 | 0.044 | 0.075 | - | - |
 | Assoc recurrent | 512x128 | 6.238 | 3.112 | 10.498 | 6.861 | 36.120 | 29.309 |
 
-Interpretation: associative addressing captures more signal than naive
-recurrent pooling on needle-64 when the few-rich memory budget is doubled.
-However, this is not yet a clean equal-parameter result: the associative model
-has +226,304 parameters relative to naive recurrent at this shape, including
-extra learned read/write slot parameters. An equal-parameter follow-up, such as
-padding naive recurrent or narrowing the associative read/write parameterization,
-would be needed before stating this as a clean mechanism result. The read
-entropy is also `6.238`, close to `ln(512)`, so this should not yet be
-interpreted as sharp content-addressed lookup of one slot. The improvement may
-come from broad averaging or redundant traces across many slots rather than
-precise associative retrieval.
+Interpretation: doubling few-rich memory and adding associative read/write does
+not reliably solve needle-64. The seed-0 result remains useful diagnostically,
+but it should not be used as a positive claim. It is also not a clean
+equal-parameter result: the associative model has +226,304 parameters relative
+to naive recurrent at this shape, including extra learned read/write slot
+parameters. The seed-0 read entropy is `6.238`, close to `ln(512)`, so even that
+outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
 ## Current Takeaway
 
@@ -660,26 +678,26 @@ Copy and needle are the cleanest synthetic evidence so far: per-token memory
 preserves exact details far better than the recurrent memory designs tested
 here. Changing recurrent slot allocation, adding a last-token update, and adding
 explicit associative read/write do not solve dense long-range exact copy.
-Associative memory helps short copy, slightly helps copy length 32, and with
-write normalization strongly improves needle gap 32, but it does not improve
-copy length 64 or random KV retrieval. Doubling few-rich memory also fails to
-move copy length 64, while raw associative memory improves needle gap 64 under
-2x memory with a known parameter-count confound.
+Associative memory helps short copy and slightly helps copy length 32, but it
+does not improve copy length 64 or random KV retrieval. The apparent
+write-normalized needle gap-32 improvement and the raw associative 2x needle-64
+improvement do not survive seed checks.
 
 The emerging distinction is:
 
 - Dense exact recall, such as copy, stresses many simultaneous token identities.
   Spreading the same memory budget across token-indexed slots remains much
   stronger than concentrating it into recurrent slots.
-- Single-fact retrieval, such as needle, can benefit from cleaner or more
-  structured associative writes, but the strongest positive numbers are still
-  single-seed probes and need seed confirmation.
+- Single-fact retrieval, such as needle, showed isolated positive outliers, but
+  those outliers were not seed-robust under the current training setup.
 
 Next useful experiments:
 
-1. Seed-check needle gap 32 with write normalization.
-2. Seed-check needle gap 64 with 2x raw associative memory.
-3. Decide whether to run an equal-parameter 2x associative comparison or leave
-   the parameter delta as a stated limitation.
-4. Consider a true fast-weight/outer-product recurrent variant only after the
-   seed checks clarify whether the associative gains are robust.
+1. Decide whether to stop the associative recurrent branch here as a negative
+   result or invest in a more stable training/update mechanism.
+2. If continuing few-rich memory, prioritize a genuinely different mechanism,
+   such as fast-weight/outer-product memory, rather than more pooling variants.
+3. Run 35M WikiText if a second large-scale real-data replication is needed.
+4. Begin the paper outline around the robust result: many-small per-token memory
+   is a stronger default for exact detail retention under matched memory budget
+   than the few-rich recurrent variants tested here.

@@ -17,33 +17,27 @@ The first milestone is intentionally modest. It proves that three model families
 
 This is not large-scale pretraining yet.
 
-See `RESULTS.md` for the current TinyStories and synthetic KV retrieval
+See `RESULTS.md` for the current TinyStories, WikiText, and synthetic memory
 checkpoint.
 
 ## Current TODOs
 
-1. Finish the larger TinyStories run.
-   This checks whether the 7M-parameter result survives at the intended 30M-50M starting scale.
-2. Record the larger TinyStories result in `RESULTS.md`.
+1. Run the larger WikiText configs.
+   This checks whether the 35M-scale TinyStories result generalizes beyond TinyStories.
+2. Record the larger WikiText result in `RESULTS.md`.
    Keep the research log synchronized with completed runs.
-3. Add and run larger WikiText configs.
-   This tests whether the scaled result generalizes beyond TinyStories.
-4. Run the associative recurrent synthetic probes.
-   Compare `recurrent` vs `assoc_recurrent` on copy, needle, and KV retrieval before spending real-data compute.
-5. Run associative memory shape sweeps.
-   Reuse `--recurrent-shapes` to compare slot-count/dim trade-offs for `assoc_recurrent`, not only naive recurrent.
-6. Analyze recurrent diagnostics.
-   Compare read/write entropy, slot usage, and memory update norms for naive vs associative recurrent memory.
-7. Add multi-seed reporting.
-   Run 3-5 seeds for the main synthetic and real-data comparisons and report mean plus standard deviation.
-8. Write a capacity-style argument.
+3. Begin the paper outline.
+   Turn the current robust result into a paper-shaped argument before adding more mechanisms.
+4. Add multi-seed reporting for final tables.
+   Run 3-5 seeds for the main synthetic comparisons and any real-data comparisons used as central claims.
+5. Write a capacity-style argument.
    Explain why many-small per-token memory may preserve exact detail better than few-rich memory under a fixed budget.
-9. Decide whether associative memory earns a real-data run.
-   Only run associative LM pretraining if it improves the cheap synthetic exact-recall probes.
-10. Write the related-work section.
+6. Decide whether to close the associative recurrent branch.
+   Current seed checks suggest treating it as a negative result rather than running real-data associative pretraining.
+7. Write the related-work section.
    Position against Transformer-XL, Compressive Transformer, RMT, ARMT, TransformerFAM, Infini-Transformer, Key-Value Means, Melodi, and Memorizing Transformers.
-11. Draft the arXiv/workshop paper.
-   Current target is arXiv first, then ICLR/COLM 2027 workshops if the scaled and associative results are strong enough.
+8. Draft the arXiv/workshop paper.
+   Current target is arXiv first, then ICLR/COLM 2027 workshops if the scaled results are strong enough.
 
 ## Repository Layout
 
@@ -308,6 +302,38 @@ Summarize after completion:
 ```bash
 cd memory-lm
 python3 experiments/summarize_large_tinystories_comparison.py
+```
+
+## Larger WikiText-103 Comparison
+
+After the larger TinyStories run, use the larger WikiText configs to test
+whether the 35M-scale result replicates on a second natural-language dataset.
+These configs use the same 35M compressed-memory architecture and match
+per-token vs recurrent on parameter count and persistent memory floats.
+
+Inspect the setup:
+
+```bash
+cd memory-lm
+python3 experiments/count_real_tokens.py \
+  configs/large_wikitext_baseline.yaml \
+  configs/large_wikitext_per_token.yaml \
+  configs/large_wikitext_recurrent.yaml
+```
+
+Launch:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_wikitext_comparison.py > large_wikitext.out 2>&1 &
+tail -f large_wikitext.out
+```
+
+Summarize after completion:
+
+```bash
+cd memory-lm
+python3 experiments/summarize_large_wikitext_comparison.py
 ```
 
 ## Associative Recurrent Synthetic Probe

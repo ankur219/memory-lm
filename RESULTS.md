@@ -199,6 +199,53 @@ Result:
 
 Interpretation: arbitrary in-context key-value binding is much harder. Per-token is generally strongest among the memory-compressed variants, while recurrent lags at 16 pairs.
 
+### Associative Recurrent Random KV
+
+This sweep compares naive recurrent memory against associative recurrent memory
+on the easier random key-value setting, using the same `256x128` persistent
+memory shape.
+
+Command:
+
+```bash
+python3 experiments/run_kv_sweep.py \
+  --pairs 4 8 16 \
+  --models recurrent assoc_recurrent \
+  --recurrent-shapes 256x128 \
+  --steps 5000 \
+  --num-examples 50000 \
+  --test-examples 5000 \
+  --batch-size 128 \
+  --num-keys 16 \
+  --num-values 16 \
+  --answer-loss-weight 20 \
+  --value-mode random \
+  --csv-path logs/kv_assoc_recurrent.csv
+```
+
+Result:
+
+| Pairs | Naive recurrent | Assoc recurrent |
+|---:|---:|---:|
+| 4 | 0.328 | 0.314 |
+| 8 | 0.234 | 0.222 |
+| 16 | 0.123 | 0.121 |
+
+Diagnostics:
+
+| Pairs | Model | Params | Mem Floats | Write Entropy | Delta Norm | Value Norm |
+|---:|---|---:|---:|---:|---:|---:|
+| 4 | Naive recurrent | 467,840 | 32,768 | 2.565 | 0.469 | 0.469 |
+| 4 | Assoc recurrent | 628,608 | 32,768 | 2.560 | 13.642 | 13.642 |
+| 8 | Naive recurrent | 467,840 | 32,768 | 3.045 | 0.868 | 0.868 |
+| 8 | Assoc recurrent | 628,608 | 32,768 | 3.020 | 60.818 | 60.818 |
+| 16 | Naive recurrent | 467,840 | 32,768 | 2.536 | 0.494 | 0.813 |
+| 16 | Assoc recurrent | 628,608 | 32,768 | 0.623 | 0.024 | 0.024 |
+
+Interpretation: associative recurrent memory does not improve random key-value
+retrieval. It is slightly worse than naive recurrent at all tested pair counts,
+despite using the same persistent-memory budget and more parameters.
+
 ## Synthetic Copy
 
 The copy task tests exact token preservation:
@@ -457,12 +504,12 @@ preserves exact details far better than the recurrent memory designs tested
 here. Changing recurrent slot allocation, adding a last-token update, and adding
 explicit associative read/write do not solve the long-range exact-recall
 collapse. Associative memory helps short copy and slightly helps copy length 32,
-but not needle or long copy. The KV probes also show that task design matters:
-identity retrieval is solved, but shifted and random binding remain difficult
-for these small models.
+but not needle, long copy, or random key-value retrieval. The KV probes also
+show that task design matters: identity retrieval is solved, but shifted and
+random binding remain difficult for these small models.
 
 Next useful experiments:
 
-1. Finish associative KV retrieval and shape sweeps.
+1. Run associative shape sweeps.
 2. Add memory normalization/clipping or a true fast-weight/outer-product recurrent variant.
 3. Run larger WikiText configs to replicate the scaled TinyStories result on a second dataset.

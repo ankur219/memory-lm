@@ -271,9 +271,9 @@ Diagnostics:
 | 16 | 628,736 | 32,768 | 5.531 | 2.198 | 177.866 | 9.523 | 5.253 | 1.562 |
 
 Interpretation: write-side normalization controls the write-source magnitude,
-but it does not improve random key-value retrieval. The normalization benefit
-seen later on needle gap 32 is therefore task-specific, not a general KV
-retrieval improvement.
+but it does not improve random key-value retrieval, and it is measurably worse
+at 16 pairs. The normalization benefit seen later on needle gap 32 is therefore
+task-specific, not a general KV retrieval improvement.
 
 ## Synthetic Copy
 
@@ -434,6 +434,13 @@ Result:
 | Assoc recurrent | 256x128 | 632,704 | 32,768 | 0.023 |
 | Naive recurrent | 512x128 | 471,936 | 65,536 | 0.031 |
 | Assoc recurrent | 512x128 | 698,240 | 65,536 | 0.023 |
+
+Diagnostics:
+
+| Model | Shape | Write Entropy | Delta Norm | Value Norm | Token Out Norm | Candidate Norm |
+|---|---|---:|---:|---:|---:|---:|
+| Naive recurrent | 512x128 | 0.693 | 10.380 | 8.919 | - | - |
+| Assoc recurrent | 512x128 | 2.911 | 246.163 | 247.052 | 396.074 | 320.263 |
 
 Interpretation: doubling few-rich memory does not improve dense exact copy for
 either recurrent variant. Since copy accuracy is measured over many copied
@@ -619,6 +626,13 @@ Result:
 |---|---|---:|---:|---:|
 | Naive recurrent | 512x128 | 480,128 | 65,536 | 0.013 |
 | Assoc recurrent | 512x128 | 706,432 | 65,536 | 0.227 |
+
+Diagnostics:
+
+| Model | Shape | Read Entropy | Write Entropy | Delta Norm | Value Norm | Token Out Norm | Candidate Norm |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Naive recurrent | 512x128 | - | 3.190 | 0.044 | 0.075 | - | - |
+| Assoc recurrent | 512x128 | 6.238 | 3.112 | 10.498 | 6.861 | 36.120 | 29.309 |
 
 Interpretation: associative addressing captures more signal than naive
 recurrent pooling on needle-64 when the few-rich memory budget is doubled.

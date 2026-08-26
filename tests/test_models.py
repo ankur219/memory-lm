@@ -118,6 +118,14 @@ def test_associative_memory_norm_sets_unit_rms():
     torch.testing.assert_close(rms, torch.ones_like(rms), atol=1e-4, rtol=1e-4)
 
 
+def test_associative_write_norm_bounds_write_source():
+    cfg = tiny_config(num_memory_tokens=4, recurrent_memory_dim=32, chunk_size=4, assoc_write_norm=True)
+    model = AssociativeRecurrentMemoryTransformer(cfg)
+    out = model(torch.randint(0, 64, (2, 12)))
+    # hidden_size is 32, so RMS-normalized vectors should have L2 norm sqrt(32).
+    assert abs(out["diagnostics"]["write_source_norm"] - (32 ** 0.5)) < 2e-2
+
+
 def test_recurrent_memory_update_gets_gradients_across_chunks():
     cfg = tiny_config(num_memory_tokens=4, recurrent_memory_dim=48, chunk_size=4)
     model = RecurrentMemoryTransformer(cfg)

@@ -65,6 +65,7 @@ class AssociativeRecurrentMemoryTransformer(nn.Module):
         self.read_out = nn.Linear(self.memory_dim, config.hidden_size, bias=False)
 
         # Explicit associative write projections.
+        self.write_norm = RMSNorm(config.hidden_size) if config.assoc_write_norm else nn.Identity()
         self.write_key = nn.Linear(config.hidden_size, self.memory_dim, bias=False)
         self.write_value = nn.Linear(config.hidden_size, self.memory_dim, bias=False)
         self.write_gate = nn.Linear(self.memory_dim * 2, self.memory_dim, bias=False)
@@ -108,8 +109,9 @@ class AssociativeRecurrentMemoryTransformer(nn.Module):
         # token states each slot should summarize, while only memory_values are
         # carried as per-sequence recurrent state.
         batch = token_out.size(0)
-        token_keys = self.write_key(token_out)
-        token_values = self.write_value(token_out)
+        write_source = self.write_norm(token_out)
+        token_keys = self.write_key(write_source)
+        token_values = self.write_value(write_source)
         write_queries = self.memory_write_queries.unsqueeze(0).expand(batch, -1, -1)
         scores = torch.matmul(write_queries, token_keys.transpose(-2, -1)) / math.sqrt(self.memory_dim)
         weights = F.softmax(scores, dim=-1)
@@ -119,6 +121,7 @@ class AssociativeRecurrentMemoryTransformer(nn.Module):
         new_memory = self._stabilize_memory(raw_memory)
         write_diagnostics = {
             "token_out_norm": float(token_out.norm(dim=-1).mean().detach().cpu()),
+            "write_source_norm": float(write_source.norm(dim=-1).mean().detach().cpu()),
             "write_value_norm": float(token_values.norm(dim=-1).mean().detach().cpu()),
             "candidate_norm": float(candidate.norm(dim=-1).mean().detach().cpu()),
             "raw_memory_norm": float(raw_memory.norm(dim=-1).mean().detach().cpu()),

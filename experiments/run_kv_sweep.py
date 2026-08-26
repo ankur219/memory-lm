@@ -73,6 +73,7 @@ def make_config(
     num_pairs: int,
     vocab_size: int,
     recurrent_shape: tuple[int, int] | None = None,
+    assoc_write_norm: bool = False,
     assoc_memory_norm: bool = False,
     assoc_memory_clip: float | None = None,
 ) -> TransformerConfig:
@@ -93,6 +94,7 @@ def make_config(
         recurrent_compressed_attention=True,
         recurrent_learned_initial=False,
         recurrent_update_style="cross_attention",
+        assoc_write_norm=assoc_write_norm,
         assoc_memory_norm=assoc_memory_norm,
         assoc_memory_clip=assoc_memory_clip,
         chunk_size=32,
@@ -175,6 +177,7 @@ def train_one(model_name: str, num_pairs: int, args, recurrent_shape: tuple[int,
         num_pairs,
         train_val.vocab.size,
         recurrent_shape=recurrent_shape,
+        assoc_write_norm=args.assoc_write_norm,
         assoc_memory_norm=args.assoc_memory_norm,
         assoc_memory_clip=args.assoc_memory_clip,
     )
@@ -223,6 +226,7 @@ def train_one(model_name: str, num_pairs: int, args, recurrent_shape: tuple[int,
     return {
         "model": model_name,
         "recurrent_shape": shape_label,
+        "assoc_write_norm": cfg.assoc_write_norm if model_name == "assoc_recurrent" else "",
         "assoc_memory_norm": cfg.assoc_memory_norm if model_name == "assoc_recurrent" else "",
         "assoc_memory_clip": cfg.assoc_memory_clip if model_name == "assoc_recurrent" else "",
         "num_pairs": num_pairs,
@@ -262,6 +266,7 @@ def collect_diagnostics(model, dataloader, device: torch.device) -> dict:
         "memory_delta_norm": diagnostics.get("memory_delta_norm", ""),
         "memory_value_norm": diagnostics.get("memory_value_norm", ""),
         "token_out_norm": diagnostics.get("token_out_norm", ""),
+        "write_source_norm": diagnostics.get("write_source_norm", ""),
         "write_value_norm": diagnostics.get("write_value_norm", ""),
         "candidate_norm": diagnostics.get("candidate_norm", ""),
         "raw_memory_norm": diagnostics.get("raw_memory_norm", ""),
@@ -290,6 +295,12 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--answer-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--assoc-write-norm",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Apply RMSNorm to token outputs before associative write_key/write_value projections.",
+    )
     parser.add_argument(
         "--assoc-memory-norm",
         action=argparse.BooleanOptionalAction,

@@ -58,6 +58,7 @@ def make_config(
     vocab_size: int,
     recurrent_update_style: str = "cross_attention",
     recurrent_shape: tuple[int, int] | None = None,
+    assoc_write_norm: bool = False,
     assoc_memory_norm: bool = False,
     assoc_memory_clip: float | None = None,
 ) -> TransformerConfig:
@@ -78,6 +79,7 @@ def make_config(
         recurrent_compressed_attention=True,
         recurrent_learned_initial=False,
         recurrent_update_style=recurrent_update_style,
+        assoc_write_norm=assoc_write_norm,
         assoc_memory_norm=assoc_memory_norm,
         assoc_memory_clip=assoc_memory_clip,
         chunk_size=32,
@@ -136,6 +138,7 @@ def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[in
         train_val.vocab_size,
         recurrent_update_style=args.recurrent_update_style,
         recurrent_shape=recurrent_shape,
+        assoc_write_norm=args.assoc_write_norm,
         assoc_memory_norm=args.assoc_memory_norm,
         assoc_memory_clip=args.assoc_memory_clip,
     )
@@ -189,6 +192,7 @@ def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[in
         "model": model_name,
         "recurrent_shape": shape_label,
         "recurrent_update_style": cfg.recurrent_update_style if model_name == "recurrent" else "",
+        "assoc_write_norm": cfg.assoc_write_norm if model_name == "assoc_recurrent" else "",
         "assoc_memory_norm": cfg.assoc_memory_norm if model_name == "assoc_recurrent" else "",
         "assoc_memory_clip": cfg.assoc_memory_clip if model_name == "assoc_recurrent" else "",
         "copy_length": copy_length,
@@ -226,6 +230,7 @@ def collect_diagnostics(model, dataloader, device: torch.device) -> dict:
         "memory_delta_norm": diagnostics.get("memory_delta_norm", ""),
         "memory_value_norm": diagnostics.get("memory_value_norm", ""),
         "token_out_norm": diagnostics.get("token_out_norm", ""),
+        "write_source_norm": diagnostics.get("write_source_norm", ""),
         "write_value_norm": diagnostics.get("write_value_norm", ""),
         "candidate_norm": diagnostics.get("candidate_norm", ""),
         "raw_memory_norm": diagnostics.get("raw_memory_norm", ""),
@@ -259,6 +264,12 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Apply RMS normalization after each associative recurrent memory write.",
+    )
+    parser.add_argument(
+        "--assoc-write-norm",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Apply RMSNorm to token outputs before associative write_key/write_value projections.",
     )
     parser.add_argument(
         "--assoc-memory-clip",

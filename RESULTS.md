@@ -66,8 +66,32 @@ Interpretation:
 - Per-token and recurrent used the same training tokens, parameter count, and persistent-memory budget.
 - Different batch sizes mean throughput should not be over-interpreted in this row.
 - Caveat: this recurrent row uses `8x32768` memory, an extreme few-giant-slots
-  shape. A matched-budget `512x512` recurrent shape check is needed before
-  treating this as the strongest recurrent baseline.
+  shape.
+
+### 35M TinyStories Recurrent Shape Check
+
+The initial proposed fairness check was `512x512`, but that shape was too
+activation-heavy on a 24GB RTX 3090. We instead ran a full-token-budget
+`128x2048` recurrent shape:
+
+```text
+128 memory tokens x 2048 dim = 262,144 memory floats
+```
+
+This keeps the same persistent-memory budget as the `8x32768` recurrent run
+while using many more, narrower memory slots.
+
+| Recurrent Shape | Train Loss | Val Loss | Perplexity | Params | Mem Floats | Train Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| `8x32768` | 1.7366 | 1.7068 | 5.51 | 35,431,680 | 262,144 | 473,992,192 |
+| `128x2048` | 1.7136 | 1.7029 | 5.49 | 35,450,112 | 262,144 | 473,992,192 |
+
+Interpretation: changing the 35M recurrent model from extreme few-giant-slots
+memory to a more balanced `128x2048` shape slightly improves TinyStories
+validation loss, but the improvement is small (`1.7068 -> 1.7029`) and does not
+close the gap to per-token many-small memory (`1.5802`). This weakens the
+concern that the main recurrent result is only an artifact of the original
+`8x32768` shape, though WikiText has not yet been rerun with this shape.
 
 ## WikiText-103 Full Validation
 

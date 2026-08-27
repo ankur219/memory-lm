@@ -1,8 +1,16 @@
-"""RMT-style recurrent memory baseline.
+"""RMT-style recurrent memory baseline adapted from the public RMT wrapper.
 
-This is a compact reproduction of the core Recurrent Memory Transformer idea:
-carry a fixed set of hidden-size memory tokens from chunk to chunk and let the
-Transformer itself update them.
+This module follows the core mechanics used by the public RMT language-model
+wrapper at:
+
+    https://github.com/booydar/recurrent-memory-transformer
+
+The official HuggingFace wrapper segments the sequence, inserts the current
+memory state both before and after each segment, runs the base model, and then
+sets the next memory state to the final hidden states at the trailing memory
+positions. We reproduce that mechanism inside this repo's small Transformer
+backbone so it can use the same tokenizer, datasets, logging, optimizer, and
+memory-budget accounting as the other models.
 
 For causal language modeling we use two memory blocks per chunk:
 
@@ -27,7 +35,7 @@ from .per_token_memory import PerTokenBlock
 
 
 class RMTMemoryTransformer(nn.Module):
-    """Segment-recurrent memory-token baseline inspired by RMT."""
+    """Segment-recurrent memory-token baseline following RMT's wrapper logic."""
 
     def __init__(self, config: TransformerConfig):
         super().__init__()
@@ -40,16 +48,12 @@ class RMTMemoryTransformer(nn.Module):
             )
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
-        initial_memory = torch.zeros(config.num_memory_tokens, config.hidden_size)
-        if config.recurrent_learned_initial:
-            self.initial_memory = nn.Parameter(initial_memory)
-        else:
-            self.register_buffer("initial_memory", initial_memory, persistent=True)
 
-        # Learned write-token bias. The current memory is added to this before
-        # placing suffix write tokens after the text, giving the update a stable
-        # slot identity while still conditioning on the previous memory value.
-        self.write_memory_bias = nn.Parameter(torch.zeros(config.num_memory_tokens, config.hidden_size))
+        # Official RMT creates a learned memory parameter and repeats it for
+        # every sequence at the start of a forward pass. The recurrent state
+        # carried between chunks is still per-sequence state and is counted in
+        # the memory budget; this learned initial value is counted as params.
+        self.memory = nn.Parameter(torch.zeros(config.num_memory_tokens, config.hidden_size))
 
         block_cls = PerTokenBlock if config.recurrent_compressed_attention else TransformerBlock
         self.layers = nn.ModuleList([block_cls(config) for _ in range(config.num_layers)])
@@ -67,24 +71,20 @@ class RMTMemoryTransformer(nn.Module):
         cos, sin = precompute_rope_frequencies(rope_dim, max_len, config.rope_base)
         self.register_buffer("rope_cos", cos, persistent=False)
         self.register_buffer("rope_sin", sin, persistent=False)
-        if isinstance(self.initial_memory, nn.Parameter):
-            nn.init.normal_(self.initial_memory, mean=0.0, std=0.02)
-        nn.init.normal_(self.write_memory_bias, mean=0.0, std=0.02)
+        nn.init.normal_(self.memory, mean=0.0, std=0.02)
 
     def _init_weights(self, module: nn.Module) -> None:
         if isinstance(module, (nn.Linear, nn.Embedding)):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def _run_chunk(self, token_embeddings: torch.Tensor, memory: torch.Tensor):
-        batch = token_embeddings.size(0)
-        prefix_memory = memory
-        suffix_memory = memory + self.write_memory_bias.unsqueeze(0).expand(batch, -1, -1)
-
         # Sequence layout:
         # [previous memory][current text][write memory]
         # Causal attention gives current text access to previous memory, while
-        # write memory can see both previous memory and current text.
-        x = torch.cat([prefix_memory, token_embeddings, suffix_memory], dim=1)
+        # write memory can see both previous memory and current text. Matching
+        # the official wrapper, the same current memory state is inserted at
+        # both read and write positions before the Transformer updates it.
+        x = torch.cat([memory, token_embeddings, memory], dim=1)
         caches = []
         for layer in self.layers:
             x, cache = layer(x, self.rope_cos, self.rope_sin)
@@ -102,7 +102,7 @@ class RMTMemoryTransformer(nn.Module):
 
     def forward(self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None):
         batch, seq_len = input_ids.shape
-        memory = self.initial_memory.unsqueeze(0).expand(batch, -1, -1)
+        memory = self.memory.unsqueeze(0).expand(batch, -1, -1)
         outputs = []
         all_caches = []
         diagnostic_rows = []

@@ -533,11 +533,20 @@ python3 experiments/run_needle_sweep.py \
 
 ## Published Recurrent Baseline Probe
 
-The first external-style recurrent baseline is available as `rmt`. It is an
-RMT-style memory-token model: each chunk receives previous memory tokens as a
-prefix, and suffix memory tokens after the chunk produce the next recurrent
-state. Text logits are taken only from the text positions, so suffix write
-tokens do not break causal language modeling.
+The first published-style recurrent baseline is available as `rmt`. It follows
+the language-modeling mechanics from the public RMT implementation
+(`booydar/recurrent-memory-transformer`, commit
+`9d0ebe1778687995697fe68e886bc1dcf0e45e1c`) inside this repo's small decoder
+backbone: each chunk receives previous memory tokens as a prefix, the same
+memory tokens are placed after the chunk as write positions, and the final
+hidden states at those write positions become the next recurrent state. Text
+logits are taken only from text positions, so suffix write tokens do not break
+causal language modeling.
+
+This is still an adapted in-harness implementation, not a full reproduction of
+the upstream RMT training stack. The paper should call it an "RMT-style baseline
+adapted from the public implementation" unless we later run the upstream code
+directly.
 
 Start with synthetic tasks before any real-data RMT run. RMT-style memory adds
 memory tokens to the attention sequence, so it is much more compute-heavy than
@@ -556,8 +565,8 @@ logs/kv_rmt_baseline.csv
 ```
 
 Use this baseline to answer the reviewer question: whether per-token memory
-only beats this repo's custom recurrent updater, or whether it also beats a
-published memory-token recurrence under the same synthetic memory budget.
+only beats this repo's custom recurrent updater, or whether it also beats an
+RMT-style memory-token recurrence under the same synthetic memory budget.
 
 Real-data runs also save checkpoints every 5000 steps and at the end:
 

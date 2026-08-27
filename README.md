@@ -27,9 +27,10 @@ checkpoint.
 1. Run the 35M recurrent `512x512` shape checks on WikiText and TinyStories.
    The original 35M recurrent configs use 8 very wide slots; `512x512` keeps
    the same memory-float and parameter budget with many more, narrower slots.
-2. Add one strong published recurrent baseline.
-   Prefer RMT or Key-Value Means if it can be reproduced cleanly under the same
-   tokenizer, dataset, context length, and memory-accounting rules.
+2. Run and evaluate the first published-style recurrent baseline.
+   The repo now includes an RMT-style memory-token baseline as `rmt`; run it on
+   synthetic copy, needle, and KV first. If it is not strong enough, evaluate
+   whether to reproduce Key-Value Means next.
 3. Build a memory-budget curve.
    Compare baseline/per-token/recurrent at multiple persistent-memory budgets
    such as 1x, 1/2x, 1/4x, and 1/8x of full KV memory. This should become a main
@@ -529,6 +530,34 @@ python3 experiments/run_needle_sweep.py \
   --answer-loss-weight 10 \
   --csv-path logs/needle_assoc_recurrent_stabilized.csv
 ```
+
+## Published Recurrent Baseline Probe
+
+The first external-style recurrent baseline is available as `rmt`. It is an
+RMT-style memory-token model: each chunk receives previous memory tokens as a
+prefix, and suffix memory tokens after the chunk produce the next recurrent
+state. Text logits are taken only from the text positions, so suffix write
+tokens do not break causal language modeling.
+
+Start with synthetic tasks before any real-data RMT run. RMT-style memory adds
+memory tokens to the attention sequence, so it is much more compute-heavy than
+the custom low-rank recurrent updater.
+
+```bash
+python3 experiments/run_rmt_synthetic_baseline.py
+```
+
+This writes:
+
+```text
+logs/copy_rmt_baseline.csv
+logs/needle_rmt_baseline.csv
+logs/kv_rmt_baseline.csv
+```
+
+Use this baseline to answer the reviewer question: whether per-token memory
+only beats this repo's custom recurrent updater, or whether it also beats a
+published memory-token recurrence under the same synthetic memory budget.
 
 Real-data runs also save checkpoints every 5000 steps and at the end:
 

@@ -5,6 +5,7 @@ from models import (
     DecoderOnlyTransformer,
     PerTokenMemoryTransformer,
     RecurrentMemoryTransformer,
+    RMTMemoryTransformer,
     TransformerConfig,
 )
 
@@ -35,6 +36,7 @@ def test_model_output_shapes():
         PerTokenMemoryTransformer,
         RecurrentMemoryTransformer,
         AssociativeRecurrentMemoryTransformer,
+        RMTMemoryTransformer,
     ]:
         model = cls(tiny_config())
         out = model(input_ids, targets=targets)
@@ -58,6 +60,7 @@ def test_causal_behavior_for_all_models():
     assert_causal(PerTokenMemoryTransformer(tiny_config()))
     assert_causal(RecurrentMemoryTransformer(tiny_config()))
     assert_causal(AssociativeRecurrentMemoryTransformer(tiny_config()))
+    assert_causal(RMTMemoryTransformer(tiny_config()))
 
 
 def test_per_token_cache_uses_compressed_width():
@@ -73,6 +76,15 @@ def test_recurrent_memory_shape():
     model = RecurrentMemoryTransformer(cfg)
     out = model(torch.randint(0, 64, (2, 11)))
     assert out["memory"].shape == (2, 5, 32)
+
+
+def test_rmt_memory_shape():
+    cfg = tiny_config(num_memory_tokens=5, recurrent_memory_dim=32, chunk_size=4)
+    model = RMTMemoryTransformer(cfg)
+    out = model(torch.randint(0, 64, (2, 11)))
+    assert out["logits"].shape == (2, 11, 64)
+    assert out["memory"].shape == (2, 5, 32)
+    assert out["diagnostics"]["memory_value_norm"] > 0
 
 
 def test_recurrent_rich_memory_shape():

@@ -36,6 +36,7 @@ from models import (
     DecoderOnlyTransformer,
     PerTokenMemoryTransformer,
     RecurrentMemoryTransformer,
+    RMTMemoryTransformer,
     TransformerConfig,
 )
 
@@ -45,6 +46,7 @@ MODEL_REGISTRY = {
     "baseline": DecoderOnlyTransformer,
     "per_token": PerTokenMemoryTransformer,
     "recurrent": RecurrentMemoryTransformer,
+    "rmt": RMTMemoryTransformer,
 }
 
 
@@ -68,7 +70,7 @@ def memory_budget_for_model(model_name: str, config: TransformerConfig, sequence
         return baseline_kv_memory_budget(config, sequence_length)
     if model_name == "per_token":
         return per_token_memory_budget(config, sequence_length)
-    if model_name in {"recurrent", "assoc_recurrent"}:
+    if model_name in {"recurrent", "assoc_recurrent", "rmt"}:
         return recurrent_memory_budget(config, per_layer_memory=config.per_layer_memory)
     raise ValueError(model_name)
 

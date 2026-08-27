@@ -2,6 +2,7 @@ from .layers import TransformerConfig
 from .associative_recurrent_memory import AssociativeRecurrentMemoryTransformer
 from .per_token_memory import PerTokenMemoryTransformer
 from .recurrent_memory import RecurrentMemoryTransformer
+from .rmt_memory import RMTMemoryTransformer
 from .transformer import DecoderOnlyTransformer
 
 __all__ = [
@@ -9,5 +10,6 @@ __all__ = [
     "DecoderOnlyTransformer",
     "PerTokenMemoryTransformer",
     "RecurrentMemoryTransformer",
+    "RMTMemoryTransformer",
     "TransformerConfig",
 ]

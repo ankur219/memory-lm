@@ -16,9 +16,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from data.synthetic import ANSWER, NeedleDataset, collate_batch
-from evaluation.efficiency import matched_recurrent_dim_for_per_token, parameter_breakdown
+from evaluation.efficiency import (
+    matched_recurrent_dim_for_per_token,
+    matched_recurrent_tokens_for_per_token,
+    parameter_breakdown,
+)
 from models import TransformerConfig
 from training.trainer import build_model, memory_budget_for_model
+
+RECURRENT_LIKE = {"recurrent", "assoc_recurrent", "rmt"}
 
 
 @torch.no_grad()
@@ -109,6 +115,15 @@ def make_config(
     elif model_name == "assoc_recurrent":
         cfg.num_memory_tokens = recurrent_shape[0] if recurrent_shape is not None else 256
         cfg.recurrent_memory_dim = recurrent_shape[1] if recurrent_shape is not None else cfg.hidden_size
+    elif model_name == "rmt":
+        if recurrent_shape is not None:
+            if recurrent_shape[1] != cfg.hidden_size:
+                raise ValueError("rmt recurrent shape must use memory_dim == hidden_size")
+            cfg.num_memory_tokens = recurrent_shape[0]
+        else:
+            cfg.recurrent_memory_dim = cfg.hidden_size
+            cfg.num_memory_tokens = matched_recurrent_tokens_for_per_token(cfg, sequence_length=sequence_length)
+        cfg.recurrent_memory_dim = cfg.hidden_size
     return cfg
 
 
@@ -162,7 +177,7 @@ def train_one(model_name: str, gap_length: int, args, recurrent_shape: tuple[int
     )
     shape_label = (
         f"{cfg.num_memory_tokens}x{cfg.recurrent_memory_dim}"
-        if model_name in {"recurrent", "assoc_recurrent"}
+        if model_name in RECURRENT_LIKE
         else ""
     )
     model = build_model(model_name, cfg).to(device)
@@ -217,7 +232,7 @@ def train_one(model_name: str, gap_length: int, args, recurrent_shape: tuple[int
         "test_answer_accuracy": test_acc,
         "params": params["total"],
         "memory_floats": mem["floats"],
-        "num_memory_tokens": cfg.num_memory_tokens if model_name in {"recurrent", "assoc_recurrent"} else "",
+        "num_memory_tokens": cfg.num_memory_tokens if model_name in RECURRENT_LIKE else "",
         "recurrent_memory_dim": cfg.recurrent_memory_dim or "",
         "training_time_sec": elapsed,
         "peak_gpu_memory_mb": peak_gpu_mb,
@@ -260,7 +275,7 @@ def main() -> None:
         nargs="+",
         type=parse_recurrent_shape,
         default=None,
-        help="Optional recurrent shapes like 256x128. Applies to recurrent and assoc_recurrent.",
+        help="Optional recurrent shapes like 256x128. Applies to recurrent, assoc_recurrent, and rmt.",
     )
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--num-examples", type=int, default=5000)
@@ -314,7 +329,7 @@ def main() -> None:
         for model_name in args.models:
             recurrent_shapes = (
                 args.recurrent_shapes
-                if model_name in {"recurrent", "assoc_recurrent"} and args.recurrent_shapes
+                if model_name in RECURRENT_LIKE and args.recurrent_shapes
                 else [None]
             )
             for recurrent_shape in recurrent_shapes:

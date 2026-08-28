@@ -824,6 +824,15 @@ Interpretation:
 - Random KV-16 does not favor RMT-style memory after the learned-initial-memory
   correction.
 
+Clarification: the RMT needle numbers are unchanged from the pre-correction seed
+check because the fairness correction changed the custom recurrent baseline, not
+the RMT model itself. RMT already used learned initial memory.
+
+The random KV-16 result is an opposite-direction finding rather than a tie:
+after the learned-initial-memory correction, custom recurrent is better on
+average than RMT-style memory (`0.104` vs. `0.065`). This means the result is not
+"RMT is better"; the memory mechanism interacts strongly with the task.
+
 Overall RMT interpretation: the published-style memory-token baseline changes
 the paper story. The correct claim is not "few-rich recurrent memory is bad."
 Instead, the corrected evidence says naive recurrent summarization is weak,
@@ -849,13 +858,19 @@ improvement do not survive seed checks.
 
 The emerging distinction is:
 
-- Dense exact recall, such as copy, stresses many simultaneous token identities.
-  Spreading the same memory budget across token-indexed slots remains much
-  stronger than concentrating it into recurrent slots.
-- Single-fact retrieval, such as needle, is different. The custom and
-  associative recurrent variants were weak or unstable, while RMT-style memory
-  tokens remain strong after the learned-initial-memory fairness correction and
-  a focused three-seed check.
+| Task Type | Winner / Pattern | Meaning |
+|---|---|---|
+| Dense exact copy | Per-token | Many-small memory is best for storing many token identities. |
+| Long-gap single fact | RMT-style vs. custom recurrent | Few-rich memory can work when the task is sparse/salient. This has not yet shown RMT beats per-token or full baseline. |
+| Random multi-pair KV | Custom recurrent > RMT-style at KV-16 | RMT is not universally better; task structure matters. |
+
+Dense exact recall, such as copy, stresses many simultaneous token identities.
+Spreading the same memory budget across token-indexed slots remains much
+stronger than concentrating it into recurrent slots. Single-fact retrieval, such
+as needle, is different: the custom and associative recurrent variants were weak
+or unstable, while RMT-style memory tokens remain strong against custom
+recurrent after the learned-initial-memory fairness correction and a focused
+three-seed check.
 
 Next useful experiments:
 

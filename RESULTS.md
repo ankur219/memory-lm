@@ -761,9 +761,8 @@ outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
 ## RMT-Style Published Baseline Probe
 
-Status: corrected learned-initial-memory comparison completed for seed 0.
-Focused seed checks were run before this fairness correction, so the corrected
-RMT setup still needs its own seed check before making final claims.
+Status: corrected learned-initial-memory comparison completed with three seeds
+for the highest-impact cells.
 
 This compares the repo's custom recurrent baseline against `rmt`, an
 RMT-style memory-token baseline adapted from the public RMT implementation. Both
@@ -783,72 +782,60 @@ Command:
 python3 experiments/run_rmt_synthetic_baseline.py
 ```
 
-### Copy
+### Corrected Seed-0 Sweep
 
-| Copy Length | Custom Recurrent | RMT-style |
-|---:|---:|---:|
-| 16 | 0.764 | 0.922 |
-| 32 | 0.045 | 0.266 |
-| 64 | 0.031 | 0.065 |
+| Task | Setting | Custom Recurrent | RMT-style |
+|---|---:|---:|---:|
+| Copy | 16 | 0.764 | 0.922 |
+| Copy | 32 | 0.045 | 0.266 |
+| Copy | 64 | 0.031 | 0.065 |
+| Needle | 16 | 1.000 | 1.000 |
+| Needle | 32 | 0.012 | 0.938 |
+| Needle | 64 | 0.015 | 0.903 |
+| Random KV | 4 | 0.322 | 0.329 |
+| Random KV | 8 | 0.222 | 0.222 |
+| Random KV | 16 | 0.123 | 0.067 |
 
-Interpretation: after matching learned initial memory, RMT-style memory remains
-better than the custom recurrent updater on copy, but it does not solve dense
-exact recall. Copy-64 is still weak for both models under the matched memory
-budget.
+### Corrected Seed Checks
 
-### Needle
+Focused seed checks were run for the cells most affected by the RMT comparison:
+copy-32, needle-32, needle-64, and random KV-16. Values are answer/copy
+accuracies.
 
-| Gap Length | Custom Recurrent | RMT-style |
-|---:|---:|---:|
-| 16 | 1.000 | 1.000 |
-| 32 | 0.012 | 0.938 |
-| 64 | 0.015 | 0.903 |
+| Task | Model | Seed 0 | Seed 1 | Seed 2 | Mean | Std |
+|---|---|---:|---:|---:|---:|---:|
+| Copy-32 | Custom recurrent | 0.045 | 0.045 | 0.057 | 0.049 | 0.007 |
+| Copy-32 | RMT-style | 0.266 | 0.062 | 0.958 | 0.429 | 0.469 |
+| Needle-32 | Custom recurrent | 0.012 | 0.015 | 0.019 | 0.016 | 0.003 |
+| Needle-32 | RMT-style | 0.938 | 0.677 | 0.491 | 0.702 | 0.225 |
+| Needle-64 | Custom recurrent | 0.015 | 0.016 | 0.013 | 0.015 | 0.002 |
+| Needle-64 | RMT-style | 0.903 | 0.966 | 0.763 | 0.877 | 0.104 |
+| Random KV-16 | Custom recurrent | 0.123 | 0.067 | 0.123 | 0.104 | 0.032 |
+| Random KV-16 | RMT-style | 0.067 | 0.060 | 0.067 | 0.065 | 0.004 |
 
-Interpretation: after matching learned initial memory, RMT-style memory remains
-much stronger than the custom recurrent updater for single-fact needle
-retrieval. This is the cleanest evidence that few-rich recurrent memory is not
-inherently weak for sparse salient retrieval; the custom recurrent summarizer
-was a weak baseline on this task. This corrected setup is still seed-0 only.
+Interpretation:
 
-### Random KV
-
-| Pairs | Custom Recurrent | RMT-style |
-|---:|---:|---:|
-| 4 | 0.322 | 0.329 |
-| 8 | 0.222 | 0.222 |
-| 16 | 0.123 | 0.067 |
-
-Interpretation: after matching learned initial memory, RMT-style memory does not
-improve random KV retrieval. It is similar at 4-8 pairs and worse at 16 pairs.
-
-### Pre-Correction Seed Check
-
-Before the learned-initial-memory fairness correction, focused RMT seed checks
-showed that copy-32 was not robust, while needle-64 was consistently strong:
-
-| Seed | Copy-32 | Needle-32 | Needle-64 |
-|---:|---:|---:|---:|
-| 0 | 1.000 | 0.938 | 0.903 |
-| 1 | 0.275 | 0.677 | 0.966 |
-| 2 | 0.062 | 0.491 | 0.763 |
-
-These seed checks are useful context, but they were run before matching learned
-initial memory in the custom recurrent baseline. The corrected learned-initial
-comparison above should be seed-checked before the RMT result becomes a final
-paper claim.
+- Copy-32 is not robust for RMT-style memory. It sometimes learns the task very
+  well, but variance is extremely high.
+- Needle-32 is seed-sensitive, but RMT-style memory remains far above the custom
+  recurrent baseline in all three seeds.
+- Needle-64 is the strongest corrected RMT result: all three RMT seeds are high,
+  while all custom recurrent seeds remain near zero.
+- Random KV-16 does not favor RMT-style memory after the learned-initial-memory
+  correction.
 
 Overall RMT interpretation: the published-style memory-token baseline changes
 the paper story. The correct claim is not "few-rich recurrent memory is bad."
-Instead, the current evidence says naive recurrent summarization is weak,
-RMT-style memory tokens are promising for sparse needle retrieval, and
-many-small per-token memory remains the strongest tested strategy for dense
-exact copy at longer length.
+Instead, the corrected evidence says naive recurrent summarization is weak,
+RMT-style memory tokens are robustly strong for long-gap single-fact needle
+retrieval, and many-small per-token memory remains the strongest tested strategy
+for dense exact copy at longer length.
 
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger dense exact recall than the recurrent variants tested so far. RMT-style memory tokens show a promising signal on long-gap single-fact needle retrieval, so the strongest claim is about how memory allocation affects different retrieval regimes, not that all few-rich recurrent memory is uniformly weak.
+> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger dense exact recall than the recurrent variants tested so far. RMT-style memory tokens are robustly strong on long-gap single-fact needle retrieval, so the strongest claim is about how memory allocation affects different retrieval regimes, not that all few-rich recurrent memory is uniformly weak.
 
 Copy is the cleanest dense exact-recall evidence so far: per-token memory
 preserves many simultaneous token identities better than the recurrent memory
@@ -867,17 +854,15 @@ The emerging distinction is:
   stronger than concentrating it into recurrent slots.
 - Single-fact retrieval, such as needle, is different. The custom and
   associative recurrent variants were weak or unstable, while RMT-style memory
-  tokens remain promising after the learned-initial-memory fairness correction.
-  This corrected setup still needs its own seed check.
+  tokens remain strong after the learned-initial-memory fairness correction and
+  a focused three-seed check.
 
 Next useful experiments:
 
 1. Compare RMT-style memory against per-token memory directly in the same
    synthetic tables.
-2. Seed-check the corrected learned-initial RMT comparison, especially
-   needle-32 and needle-64.
-3. Decide whether RMT-style should be scaled to real-data runs or kept as a
+2. Decide whether RMT-style should be scaled to real-data runs or kept as a
    synthetic published-baseline probe.
-4. Begin the paper outline around the refined result: many-small per-token
+3. Begin the paper outline around the refined result: many-small per-token
    memory is stronger for dense exact recall, while RMT-style memory shows that
    few-rich memory can work well for sparse salient retrieval.

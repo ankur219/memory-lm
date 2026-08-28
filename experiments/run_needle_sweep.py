@@ -78,6 +78,7 @@ def make_config(
     vocab_size: int,
     recurrent_update_style: str = "cross_attention",
     recurrent_shape: tuple[int, int] | None = None,
+    recurrent_learned_initial: bool = False,
     assoc_write_norm: bool = False,
     assoc_memory_norm: bool = False,
     assoc_memory_clip: float | None = None,
@@ -95,7 +96,7 @@ def make_config(
         num_memory_tokens=8,
         recurrent_update_rank=4,
         recurrent_compressed_attention=True,
-        recurrent_learned_initial=False,
+        recurrent_learned_initial=recurrent_learned_initial,
         recurrent_update_style=recurrent_update_style,
         assoc_write_norm=assoc_write_norm,
         assoc_memory_norm=assoc_memory_norm,
@@ -171,6 +172,7 @@ def train_one(model_name: str, gap_length: int, args, recurrent_shape: tuple[int
         train_val.vocab_size,
         recurrent_update_style=args.recurrent_update_style,
         recurrent_shape=recurrent_shape,
+        recurrent_learned_initial=args.recurrent_learned_initial,
         assoc_write_norm=args.assoc_write_norm,
         assoc_memory_norm=args.assoc_memory_norm,
         assoc_memory_clip=args.assoc_memory_clip,
@@ -289,6 +291,12 @@ def main() -> None:
         choices=["mean_gru", "cross_attention", "last_tokens"],
         default="cross_attention",
         help="Only applies to the naive recurrent model. assoc_recurrent uses explicit associative read/write.",
+    )
+    parser.add_argument(
+        "--recurrent-learned-initial",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use learned initial memory for recurrent-like models. Useful when comparing against RMT.",
     )
     parser.add_argument(
         "--assoc-memory-norm",

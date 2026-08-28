@@ -166,8 +166,31 @@ Interpretation:
   training tokens, context length, tokenizer, optimizer settings, and persistent
   memory budget.
 - Caveat: this recurrent row uses `8x32768` memory, an extreme few-giant-slots
-  shape. A matched-budget `512x512` recurrent shape check is needed before
-  treating this as the strongest recurrent baseline.
+  shape.
+
+### 35M WikiText-103 Recurrent Shape Check
+
+As with TinyStories, the full `512x512` recurrent shape was too
+activation-heavy on a 24GB RTX 3090. We instead ran a full-token-budget
+`128x2048` recurrent shape:
+
+```text
+128 memory tokens x 2048 dim = 262,144 memory floats
+```
+
+This keeps the same persistent-memory budget as the `8x32768` recurrent run
+while using many more, narrower memory slots.
+
+| Recurrent Shape | Train Loss | Val Loss | Perplexity | Params | Mem Floats | Train Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| `8x32768` | 3.7435 | 3.7973 | 44.58 | 35,431,680 | 262,144 | 119,085,056 |
+| `128x2048` | 3.8147 | 3.7861 | 44.08 | 35,450,112 | 262,144 | 119,085,056 |
+
+Interpretation: the fairer `128x2048` recurrent shape again improves
+validation loss slightly (`3.7973 -> 3.7861`), but the improvement is small and
+does not close the gap to per-token many-small memory (`3.6831`). Together with
+the TinyStories shape check, this weakens the concern that the recurrent
+underperformance is mainly caused by the original `8x32768` shape.
 
 ## Synthetic KV Retrieval
 

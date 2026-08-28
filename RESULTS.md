@@ -759,16 +759,79 @@ to naive recurrent at this shape, including extra learned read/write slot
 parameters. The seed-0 read entropy is `6.238`, close to `ln(512)`, so even that
 outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
+## RMT-Style Published Baseline Probe
+
+Status: single-seed synthetic probe completed.
+
+This compares the repo's custom recurrent baseline against `rmt`, an
+RMT-style memory-token baseline adapted from the public RMT implementation. Both
+use the same synthetic memory budget:
+
+```text
+256 memory tokens x 128 dim = 32,768 memory floats
+```
+
+Command:
+
+```bash
+python3 experiments/run_rmt_synthetic_baseline.py
+```
+
+### Copy
+
+| Copy Length | Custom Recurrent | RMT-style |
+|---:|---:|---:|
+| 16 | 0.942 | 1.000 |
+| 32 | 0.046 | 1.000 |
+| 64 | 0.031 | 0.031 |
+
+Interpretation: RMT-style memory tokens are much stronger than the custom
+recurrent updater for medium-length dense copy, but they still collapse at copy
+length 64 under the same memory budget.
+
+### Needle
+
+| Gap Length | Custom Recurrent | RMT-style |
+|---:|---:|---:|
+| 16 | 1.000 | 1.000 |
+| 32 | 0.014 | 0.938 |
+| 64 | 0.013 | 0.903 |
+
+Interpretation: RMT-style memory is dramatically stronger for single-fact
+needle retrieval. This shows that few-rich recurrent memory is not inherently
+weak for sparse salient retrieval; the custom recurrent summarizer was a weak
+baseline on this task.
+
+### Random KV
+
+| Pairs | Custom Recurrent | RMT-style |
+|---:|---:|---:|
+| 4 | 0.328 | 0.329 |
+| 8 | 0.234 | 0.222 |
+| 16 | 0.067 | 0.158 |
+
+Interpretation: RMT-style memory is similar to the custom recurrent baseline at
+easy KV settings and better at the harder 16-pair setting, though this remains
+a single-seed result.
+
+Overall RMT interpretation: the published-style memory-token baseline changes
+the paper story. The correct claim is not "few-rich recurrent memory is bad."
+Instead, the current evidence says naive recurrent summarization is weak,
+RMT-style memory tokens are much stronger for sparse retrieval, and many-small
+per-token memory remains the strongest tested strategy for dense exact copy at
+longer length.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger exact multi-item recall than few-rich recurrent memory, while few-rich recurrent memory is more efficient.
+> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger dense exact recall than the recurrent variants tested so far. RMT-style memory tokens substantially improve sparse retrieval, so the strongest claim is about how memory allocation affects different retrieval regimes, not that all few-rich recurrent memory is uniformly weak.
 
-Copy and needle are the cleanest synthetic evidence so far: per-token memory
-preserves exact details far better than the recurrent memory designs tested
-here. Changing recurrent slot allocation, adding a last-token update, and adding
-explicit associative read/write do not solve dense long-range exact copy.
+Copy is the cleanest dense exact-recall evidence so far: per-token memory
+preserves many simultaneous token identities better than the recurrent memory
+designs tested here. Changing recurrent slot allocation, adding a last-token
+update, adding explicit associative read/write, and adding RMT-style memory
+tokens do not solve copy length 64 under the matched synthetic budget.
 Associative memory helps short copy and slightly helps copy length 32, but it
 does not improve copy length 64 or random KV retrieval. The apparent
 write-normalized needle gap-32 improvement and the raw associative 2x needle-64
@@ -779,15 +842,18 @@ The emerging distinction is:
 - Dense exact recall, such as copy, stresses many simultaneous token identities.
   Spreading the same memory budget across token-indexed slots remains much
   stronger than concentrating it into recurrent slots.
-- Single-fact retrieval, such as needle, showed isolated positive outliers, but
-  those outliers were not seed-robust under the current training setup.
+- Single-fact retrieval, such as needle, is different. The custom and
+  associative recurrent variants were weak or unstable, but RMT-style memory
+  tokens perform strongly at gaps 32 and 64 in the first synthetic probe.
 
 Next useful experiments:
 
-1. Decide whether to stop the associative recurrent branch here as a negative
-   result or invest in a more stable training/update mechanism.
-2. If continuing few-rich memory, prioritize a genuinely different mechanism,
-   such as fast-weight/outer-product memory, rather than more pooling variants.
-3. Begin the paper outline around the robust result: many-small per-token memory
-   is a stronger default for exact detail retention under matched memory budget
-   than the few-rich recurrent variants tested here.
+1. Seed-check the RMT-style synthetic result, especially needle and copy length
+   32.
+2. Compare RMT-style memory against per-token memory directly in the same
+   synthetic tables.
+3. Decide whether RMT-style should be scaled to real-data runs or kept as a
+   synthetic published-baseline probe.
+4. Begin the paper outline around the refined result: many-small per-token
+   memory is stronger for dense exact recall, while RMT-style memory shows that
+   few-rich memory can work well for sparse salient retrieval.

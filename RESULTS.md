@@ -761,7 +761,8 @@ outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
 ## RMT-Style Published Baseline Probe
 
-Status: single-seed synthetic probe completed.
+Status: synthetic probe completed with focused seed checks for the largest RMT
+signals.
 
 This compares the repo's custom recurrent baseline against `rmt`, an
 RMT-style memory-token baseline adapted from the public RMT implementation. Both
@@ -779,17 +780,30 @@ python3 experiments/run_rmt_synthetic_baseline.py
 
 ### Copy
 
+Initial seed-0 result:
+
 | Copy Length | Custom Recurrent | RMT-style |
 |---:|---:|---:|
 | 16 | 0.942 | 1.000 |
 | 32 | 0.046 | 1.000 |
 | 64 | 0.031 | 0.031 |
 
-Interpretation: RMT-style memory tokens are much stronger than the custom
-recurrent updater for medium-length dense copy, but they still collapse at copy
-length 64 under the same memory budget.
+Focused seed check for RMT-style copy-32:
+
+| Seed | RMT-style Copy-32 Accuracy |
+|---:|---:|
+| 0 | 1.000 |
+| 1 | 0.275 |
+| 2 | 0.062 |
+
+Interpretation: the seed-0 RMT-style copy-32 result is not robust. RMT-style
+memory tokens can sometimes solve medium-length dense copy, but this run does
+not support a stable copy advantage. At copy length 64, RMT-style memory remains
+near the custom recurrent baseline.
 
 ### Needle
+
+Initial seed-0 result:
 
 | Gap Length | Custom Recurrent | RMT-style |
 |---:|---:|---:|
@@ -797,10 +811,20 @@ length 64 under the same memory budget.
 | 32 | 0.014 | 0.938 |
 | 64 | 0.013 | 0.903 |
 
-Interpretation: RMT-style memory is dramatically stronger for single-fact
-needle retrieval. This shows that few-rich recurrent memory is not inherently
-weak for sparse salient retrieval; the custom recurrent summarizer was a weak
-baseline on this task.
+Focused seed checks for RMT-style needle retrieval:
+
+| Seed | Needle-32 Accuracy | Needle-64 Accuracy |
+|---:|---:|---:|
+| 0 | 0.938 | 0.903 |
+| 1 | 0.677 | 0.966 |
+| 2 | 0.491 | 0.763 |
+
+Interpretation: RMT-style memory is seed-sensitive at needle-32 but remains
+clearly above the custom recurrent baseline. Needle-64 is the strongest
+replicated RMT result: all three seeds are high, while the custom recurrent
+baseline is near zero. This shows that few-rich recurrent memory is not
+inherently weak for sparse salient retrieval; the custom recurrent summarizer
+was a weak baseline on this task.
 
 ### Random KV
 
@@ -817,15 +841,15 @@ a single-seed result.
 Overall RMT interpretation: the published-style memory-token baseline changes
 the paper story. The correct claim is not "few-rich recurrent memory is bad."
 Instead, the current evidence says naive recurrent summarization is weak,
-RMT-style memory tokens are much stronger for sparse retrieval, and many-small
-per-token memory remains the strongest tested strategy for dense exact copy at
-longer length.
+RMT-style memory tokens are robustly strong for long-gap single-fact needle
+retrieval, and many-small per-token memory remains the strongest tested
+strategy for dense exact copy at longer length.
 
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger dense exact recall than the recurrent variants tested so far. RMT-style memory tokens substantially improve sparse retrieval, so the strongest claim is about how memory allocation affects different retrieval regimes, not that all few-rich recurrent memory is uniformly weak.
+> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger dense exact recall than the recurrent variants tested so far. RMT-style memory tokens are robustly strong on long-gap single-fact needle retrieval, so the strongest claim is about how memory allocation affects different retrieval regimes, not that all few-rich recurrent memory is uniformly weak.
 
 Copy is the cleanest dense exact-recall evidence so far: per-token memory
 preserves many simultaneous token identities better than the recurrent memory
@@ -843,17 +867,15 @@ The emerging distinction is:
   Spreading the same memory budget across token-indexed slots remains much
   stronger than concentrating it into recurrent slots.
 - Single-fact retrieval, such as needle, is different. The custom and
-  associative recurrent variants were weak or unstable, but RMT-style memory
-  tokens perform strongly at gaps 32 and 64 in the first synthetic probe.
+  associative recurrent variants were weak or unstable, while RMT-style memory
+  tokens replicated strongly at gap 64 and remained above baseline at gap 32.
 
 Next useful experiments:
 
-1. Seed-check the RMT-style synthetic result, especially needle and copy length
-   32.
-2. Compare RMT-style memory against per-token memory directly in the same
+1. Compare RMT-style memory against per-token memory directly in the same
    synthetic tables.
-3. Decide whether RMT-style should be scaled to real-data runs or kept as a
+2. Decide whether RMT-style should be scaled to real-data runs or kept as a
    synthetic published-baseline probe.
-4. Begin the paper outline around the refined result: many-small per-token
+3. Begin the paper outline around the refined result: many-small per-token
    memory is stronger for dense exact recall, while RMT-style memory shows that
    few-rich memory can work well for sparse salient retrieval.

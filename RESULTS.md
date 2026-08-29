@@ -910,11 +910,14 @@ Results:
 Interpretation: RMT-style memory is a much stronger recurrent baseline than the
 custom recurrent updater for needle retrieval, but it does not beat per-token
 memory in the direct synthetic comparison. Per-token is perfect on copy and
-needle across these seeds and is better on random KV-16 on average. This
-supports the stronger version of the many-small result: spreading memory across
-token-indexed states remains the most reliable strategy tested here for exact
-synthetic recall, even when the few-rich side uses an RMT-style memory-token
-mechanism.
+needle across these seeds and is better on random KV-16 with non-overlapping
+seed ranges: RMT's best KV-16 seed remains below per-token's worst KV-16 seed.
+The RMT needle numbers match the corrected recurrent-vs-RMT seed check because
+the RMT configuration and seeds are unchanged; this is expected deterministic
+reproduction, not a separate copied result. This supports the stronger version
+of the many-small result: spreading memory across token-indexed states remains
+the most reliable strategy tested here for exact synthetic recall, even when the
+few-rich side uses an RMT-style memory-token mechanism.
 
 ## Current Takeaway
 

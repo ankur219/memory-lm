@@ -840,11 +840,87 @@ RMT-style memory tokens are robustly strong for long-gap single-fact needle
 retrieval, and many-small per-token memory remains the strongest tested strategy
 for dense exact copy at longer length.
 
+## Direct Per-Token vs RMT Synthetic Comparison
+
+Status: three-seed direct comparison completed for the most important synthetic
+cells.
+
+This comparison asks whether RMT-style memory only beats the custom recurrent
+baseline, or whether it also beats the many-small per-token model.
+
+Command:
+
+```bash
+for SEED in 0 1 2; do
+  python3 experiments/run_copy_sweep.py \
+    --lengths 32 64 \
+    --models per_token rmt \
+    --recurrent-shapes 256x128 \
+    --steps 3000 \
+    --num-examples 30000 \
+    --test-examples 3000 \
+    --batch-size 128 \
+    --seed $SEED \
+    --csv-path logs/copy_rmt_vs_per_token_seed${SEED}.csv
+
+  python3 experiments/run_needle_sweep.py \
+    --gaps 32 64 \
+    --models per_token rmt \
+    --recurrent-shapes 256x128 \
+    --steps 3000 \
+    --num-examples 30000 \
+    --test-examples 3000 \
+    --batch-size 128 \
+    --answer-loss-weight 10 \
+    --seed $SEED \
+    --csv-path logs/needle_rmt_vs_per_token_seed${SEED}.csv
+
+  python3 experiments/run_kv_sweep.py \
+    --pairs 16 \
+    --models per_token rmt \
+    --recurrent-shapes 256x128 \
+    --steps 5000 \
+    --num-examples 50000 \
+    --test-examples 5000 \
+    --batch-size 128 \
+    --num-keys 16 \
+    --num-values 16 \
+    --answer-loss-weight 20 \
+    --value-mode random \
+    --seed $SEED \
+    --csv-path logs/kv16_rmt_vs_per_token_seed${SEED}.csv
+done
+```
+
+Results:
+
+| Task | Model | Seed 0 | Seed 1 | Seed 2 | Mean | Std |
+|---|---|---:|---:|---:|---:|---:|
+| Copy-32 | Per-token | 1.000 | 1.000 | 1.000 | 1.000 | 0.000 |
+| Copy-32 | RMT-style | 0.112 | 0.963 | 0.964 | 0.680 | 0.491 |
+| Copy-64 | Per-token | 1.000 | 1.000 | 1.000 | 1.000 | 0.000 |
+| Copy-64 | RMT-style | 0.031 | 0.030 | 0.031 | 0.031 | 0.000 |
+| Needle-32 | Per-token | 1.000 | 1.000 | 1.000 | 1.000 | 0.000 |
+| Needle-32 | RMT-style | 0.938 | 0.677 | 0.491 | 0.702 | 0.225 |
+| Needle-64 | Per-token | 1.000 | 1.000 | 1.000 | 1.000 | 0.000 |
+| Needle-64 | RMT-style | 0.903 | 0.966 | 0.763 | 0.877 | 0.104 |
+| Random KV-16 | Per-token | 0.163 | 0.167 | 0.173 | 0.168 | 0.005 |
+| Random KV-16 | RMT-style | 0.067 | 0.159 | 0.067 | 0.098 | 0.053 |
+
+Interpretation: RMT-style memory is a much stronger recurrent baseline than the
+custom recurrent updater for needle retrieval, but it does not beat per-token
+memory in the direct synthetic comparison. Per-token is perfect on copy and
+needle across these seeds and is better on random KV-16 on average. This
+supports the stronger version of the many-small result: spreading memory across
+token-indexed states remains the most reliable strategy tested here for exact
+synthetic recall, even when the few-rich side uses an RMT-style memory-token
+mechanism.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and much stronger dense exact recall than the recurrent variants tested so far. RMT-style memory tokens are robustly strong on long-gap single-fact needle retrieval, so the strongest claim is about how memory allocation affects different retrieval regimes, not that all few-rich recurrent memory is uniformly weak.
+> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and the strongest exact synthetic recall among the tested models. RMT-style memory tokens are robustly strong against the custom recurrent baseline on long-gap single-fact needle retrieval, but they do not beat per-token memory in direct synthetic comparisons.
 
 Copy is the cleanest dense exact-recall evidence so far: per-token memory
 preserves many simultaneous token identities better than the recurrent memory
@@ -861,8 +937,8 @@ The emerging distinction is:
 | Task Type | Winner / Pattern | Meaning |
 |---|---|---|
 | Dense exact copy | Per-token | Many-small memory is best for storing many token identities. |
-| Long-gap single fact | RMT-style vs. custom recurrent | Few-rich memory can work when the task is sparse/salient. This has not yet shown RMT beats per-token or full baseline. |
-| Random multi-pair KV | Custom recurrent > RMT-style at KV-16 | RMT is not universally better; task structure matters. |
+| Long-gap single fact | Per-token overall; RMT-style beats custom recurrent | Few-rich memory can work when the task is sparse/salient, but per-token still wins the direct comparison. |
+| Random multi-pair KV | Per-token overall; custom recurrent > RMT-style at KV-16 | RMT is not universally better; task structure matters. |
 
 Dense exact recall, such as copy, stresses many simultaneous token identities.
 Spreading the same memory budget across token-indexed slots remains much
@@ -870,14 +946,12 @@ stronger than concentrating it into recurrent slots. Single-fact retrieval, such
 as needle, is different: the custom and associative recurrent variants were weak
 or unstable, while RMT-style memory tokens remain strong against custom
 recurrent after the learned-initial-memory fairness correction and a focused
-three-seed check.
+three-seed check. Direct comparison still favors per-token memory.
 
 Next useful experiments:
 
-1. Compare RMT-style memory against per-token memory directly in the same
-   synthetic tables.
-2. Decide whether RMT-style should be scaled to real-data runs or kept as a
+1. Decide whether RMT-style should be scaled to real-data runs or kept as a
    synthetic published-baseline probe.
-3. Begin the paper outline around the refined result: many-small per-token
+2. Begin the paper outline around the refined result: many-small per-token
    memory is stronger for dense exact recall, while RMT-style memory shows that
    few-rich memory can work well for sparse salient retrieval.

@@ -22,6 +22,15 @@ checkpoint. Paper drafting artifacts live under `paper/`.
 
 ## Current TODOs
 
+### Currently Running
+
+1. **35M real-data seed-1.**
+   Output: `real_35m_seed1.out`. This addresses the single-seed weakness in the
+   main TinyStories/WikiText language-modeling tables.
+2. **Long-context synthetic needle/copy.**
+   Output: `long_synthetic.out`. This addresses the reviewer concern that the
+   current synthetic evidence is mostly at short context lengths.
+
 ### Active 1-6 Plan
 
 1. **Paper outline.**
@@ -42,16 +51,30 @@ checkpoint. Paper drafting artifacts live under `paper/`.
    paper needs a stronger external real-data baseline. Scaling RMT to 35M
    real-data runs is optional and compute-expensive.
 5. **Multi-seed 35M real-data checks.**
-   Run second/third seeds for the final central 35M TinyStories and WikiText
-   tables before making strong submission claims.
+   Seed-1 is currently running. After it finishes, update `RESULTS.md`,
+   `paper/DRAFT.md`, and `paper/TABLES.md` with mean/range or mean +/- std.
 6. **Memory-budget curve.**
    Build the main scaling figure over persistent-memory budgets, for example
    1x, 1/2x, 1/4x, and 1/8x of full KV memory. See
    `paper/EXPERIMENT_PLAN.md`.
 
+### Remaining After Current Runs
+
+1. Update `RESULTS.md` and paper files with the 35M seed-1 and long-context
+   synthetic results.
+2. Implement and run the synthetic memory-budget curve.
+3. Decide whether to run one 35M RMT TinyStories language-modeling experiment
+   or keep RMT as a synthetic-only published-baseline probe.
+4. Add real citations and polish the related-work prose.
+5. Polish generated figures and captions.
+6. Optional: reproduce actual ARMT/KVM code for a stronger external baseline.
+7. Optional: run a 70M-100M scale point if targeting a higher-ambition venue.
+8. Deferred: real-data long-context experiments.
+
 ### Parked Or Closed
 
-- 100M-150M scale point: parked for now.
+- 100M-150M scale point: parked for now; 70M-100M is also optional, not part of
+  the near-term plan.
 - Fast-weight or outer-product memory: deliberately not planned for now.
 - Associative recurrent branch: treated as a negative/diagnostic result unless
   later evidence reopens it.

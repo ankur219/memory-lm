@@ -1003,6 +1003,70 @@ of the many-small result: spreading memory across token-indexed states remains
 the most reliable strategy tested here for exact synthetic recall, even when the
 few-rich side uses an RMT-style memory-token mechanism.
 
+## Token Salience and Retention Probe
+
+Status: first-pass oracle retention probe completed for copy-32, needle-64, and
+random KV-16.
+
+This diagnostic asks whether all per-token memory slots are needed. For a
+trained per-token model, each token's compressed K/V memory is ablated to
+estimate salience. At evaluation time, only the top salience-ranked slots are
+kept, and dropped slots are replaced with zero memory. Random and uniform-stride
+retention are same-budget controls.
+
+Command pattern:
+
+```bash
+python3 experiments/run_token_retention.py \
+  --task copy \
+  --copy-length 32 \
+  --train-steps 1000 \
+  --num-examples 10000 \
+  --test-examples 128 \
+  --batch-size 16 \
+  --analyze-batches 4 \
+  --keep-fracs 0.5 0.25 0.1 0.05 \
+  --csv-path logs/token_retention_copy32.csv
+```
+
+Results:
+
+| Task | Full Per-Token | Best Salience Retention | Random / Control | Conclusion |
+|---|---:|---:|---:|---|
+| Copy-32 accuracy | 1.000 | 0.983 at 50% memory | random 50%: 0.509; stride 50%: 0.492 | Strong: salience keeps near-full accuracy with half memory. |
+| KV-16 loss | 2.843 | 2.850 at 50% memory | random 50%: 4.381; stride 50%: 4.781 | Useful loss result: salience preserves near-full loss, but accuracy is near floor. |
+| Needle-64 accuracy/loss | acc 0.062; loss 3.931 | 50% memory: acc 0.078; loss 4.027 | zero memory: acc 0.016; loss 4.339 | Inconclusive: full model did not learn needle well enough. |
+
+Detailed retention results:
+
+| Task | Method | Memory Kept | Accuracy | Loss |
+|---|---|---:|---:|---:|
+| Copy-32 | full | 100% | 1.000 | 2.0188 |
+| Copy-32 | oracle top-k | 50% | 0.983 | 2.0527 |
+| Copy-32 | random top-k | 50% | 0.509 | 5.3514 |
+| Copy-32 | stride top-k | 50% | 0.492 | 4.6388 |
+| Copy-32 | oracle top-k | 25% | 0.463 | 4.4898 |
+| Copy-32 | oracle top-k | 10% | 0.191 | 5.8972 |
+| KV-16 | full | 100% | 0.047 | 2.8432 |
+| KV-16 | oracle top-k | 50% | 0.047 | 2.8497 |
+| KV-16 | random top-k | 50% | 0.047 | 4.3811 |
+| KV-16 | stride top-k | 50% | 0.047 | 4.7806 |
+| KV-16 | oracle top-k | 10% | 0.047 | 3.3526 |
+| Needle-64 | full | 100% | 0.062 | 3.9312 |
+| Needle-64 | oracle top-k | 50% | 0.078 | 4.0266 |
+| Needle-64 | zero memory | 0% | 0.016 | 4.3391 |
+
+Interpretation: token salience is meaningful, but currently strongest as a
+diagnostic rather than a new model. Copy-32 gives the clean result:
+oracle-selected token slots preserve almost full performance using 50% of
+per-token memory, while random/stride retention collapse toward 50% accuracy.
+KV-16 shows the same pattern in loss but not accuracy, because the full
+per-token model's exact-match accuracy is near floor in this retention setup.
+Needle-64 is not usable evidence yet because full-memory accuracy is also near
+floor. The safe claim is that per-token memory contains useful redundancy, but
+dense exact recall still degrades sharply under aggressive compression below
+50% memory.
+
 ## Current Takeaway
 
 The current evidence supports a cautious statement:
@@ -1034,6 +1098,12 @@ as needle, is different: the custom and associative recurrent variants were weak
 or unstable, while RMT-style memory tokens remain strong against custom
 recurrent after the learned-initial-memory fairness correction and a focused
 three-seed check. Direct comparison still favors per-token memory.
+
+The salience-retention probe adds a mechanism hint: per-token memory has some
+compressible redundancy, but the useful tokens are not interchangeable. On
+copy-32, oracle-selected top-50% token memory nearly matches full per-token
+accuracy, while random and stride retention at the same memory budget perform
+much worse.
 
 Next useful experiments:
 

@@ -71,6 +71,31 @@ def test_per_token_cache_uses_compressed_width():
     assert value.shape == (2, 4, 10, 4)
 
 
+def test_per_token_memory_override_reproduces_logits():
+    model = PerTokenMemoryTransformer(tiny_config(memory_dim=16))
+    model.eval()
+    input_ids = torch.randint(0, 64, (2, 10))
+    with torch.no_grad():
+        out = model(input_ids)
+        replay = model(input_ids, memory_overrides=out["cache"])
+    torch.testing.assert_close(out["logits"], replay["logits"])
+
+
+def test_per_token_memory_override_checks_shape():
+    model = PerTokenMemoryTransformer(tiny_config(memory_dim=16))
+    input_ids = torch.randint(0, 64, (2, 10))
+    out = model(input_ids)
+    bad_cache = list(out["cache"])
+    key, value = bad_cache[0]
+    bad_cache[0] = (key[:, :, :-1], value)
+    try:
+        model(input_ids, memory_overrides=bad_cache)
+    except ValueError as exc:
+        assert "memory_override" in str(exc)
+    else:
+        raise AssertionError("Expected malformed memory override to raise ValueError")
+
+
 def test_recurrent_memory_shape():
     cfg = tiny_config(num_memory_tokens=5, chunk_size=4)
     model = RecurrentMemoryTransformer(cfg)

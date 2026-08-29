@@ -76,6 +76,66 @@ Reason:
 Run RMT real-data only if the target venue needs a stronger external real-data
 baseline.
 
+### 5. Token Salience Analysis
+
+Goal: understand why per-token memory works. The question is whether every
+token-indexed memory slot is load-bearing, or whether most of the useful memory
+mass is concentrated in a small subset of salient tokens.
+
+Implemented script:
+
+```bash
+python3 experiments/run_token_salience.py
+```
+
+Validation experiments:
+
+```bash
+python3 experiments/run_token_salience.py \
+  --task copy \
+  --copy-length 32 \
+  --train-steps 1000 \
+  --num-examples 10000 \
+  --test-examples 128 \
+  --batch-size 16 \
+  --analyze-batches 4 \
+  --csv-path logs/token_salience_copy32.csv
+
+python3 experiments/run_token_salience.py \
+  --task needle \
+  --gap-length 64 \
+  --train-steps 1000 \
+  --num-examples 10000 \
+  --test-examples 128 \
+  --batch-size 16 \
+  --analyze-batches 4 \
+  --csv-path logs/token_salience_needle64.csv
+
+python3 experiments/run_token_salience.py \
+  --task kv \
+  --num-pairs 16 \
+  --num-keys 32 \
+  --num-values 16 \
+  --value-mode random \
+  --train-steps 2000 \
+  --num-examples 20000 \
+  --test-examples 128 \
+  --batch-size 16 \
+  --analyze-batches 4 \
+  --csv-path logs/token_salience_kv16.csv
+```
+
+Expected interpretation:
+
+- Copy should spread salience across many source tokens.
+- Needle should concentrate salience around the needle value.
+- KV should concentrate salience on queried or query-relevant key/value tokens
+  if the model has learned the association.
+
+If salience is sparse on real text, that motivates hybrid memory: preserve
+salient per-token slots and pool/compress the rest. If salience is broad, it
+supports the current many-small result more directly.
+
 ## Deferred
 
 - Real-data longer contexts: 512, 1024, 2048.

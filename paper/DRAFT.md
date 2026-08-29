@@ -244,6 +244,26 @@ direct per-token comparison then clarifies the boundary: RMT is a much stronger
 few-rich baseline, but many-small per-token memory remains stronger overall for
 exact synthetic recall.
 
+### 6.1 Which Per-Token Slots Matter?
+
+The current results show that per-token memory is effective, but they do not yet
+explain whether every token-indexed slot is equally useful. We therefore add a
+token-salience analysis as a planned diagnostic. For a trained per-token model,
+we ablate one token's compressed K/V memory at every layer, replace it with the
+sequence mean memory slot, and measure the downstream increase in loss. This
+produces a salience score for each token position.
+
+This diagnostic distinguishes two possible explanations for the per-token
+advantage. If salience is broad, then many-small memory works because many token
+identities genuinely need separate storage. If salience is sparse, then the
+result points toward a hybrid design: keep high-salience token slots at full
+resolution and pool or merge low-salience tokens.
+
+The diagnostic should be validated on synthetic tasks before being used on real
+text. Copy should make many source tokens salient; needle should concentrate
+salience near the needle value; KV should highlight key/value positions when the
+association is learned.
+
 ## 7. Limitations
 
 The current main scale is 35M parameters. This is large enough to move beyond a
@@ -263,4 +283,3 @@ default tested here for language modeling and exact recall. Few-rich recurrent
 memory is not uniformly bad: RMT-style memory tokens are strong for sparse
 long-gap single-fact retrieval. But in direct comparisons across copy, needle,
 and random KV, per-token memory remains the most reliable exact-recall strategy.
-

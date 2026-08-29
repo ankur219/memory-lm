@@ -31,7 +31,7 @@ checkpoint. Paper drafting artifacts live under `paper/`.
    Output: `long_synthetic.out`. This addresses the reviewer concern that the
    current synthetic evidence is mostly at short context lengths.
 
-### Active 1-6 Plan
+### Active Plan
 
 1. **Paper outline.**
    First draft started around the central question: under a fixed
@@ -57,6 +57,10 @@ checkpoint. Paper drafting artifacts live under `paper/`.
    Build the main scaling figure over persistent-memory budgets, for example
    1x, 1/2x, 1/4x, and 1/8x of full KV memory. See
    `paper/EXPERIMENT_PLAN.md`.
+7. **Token salience analysis.**
+   Use `experiments/run_token_salience.py` to estimate which per-token memory
+   slots are actually load-bearing. Validate on copy/needle/KV first, then run
+   on trained real-data per-token checkpoints.
 
 ### Remaining After Current Runs
 
@@ -85,6 +89,20 @@ Regenerate current paper figures with:
 
 ```bash
 python3 paper/make_figures.py
+```
+
+Run a token-salience probe:
+
+```bash
+python3 experiments/run_token_salience.py \
+  --task copy \
+  --copy-length 32 \
+  --train-steps 1000 \
+  --num-examples 10000 \
+  --test-examples 128 \
+  --batch-size 16 \
+  --analyze-batches 4 \
+  --csv-path logs/token_salience_copy32.csv
 ```
 
 ### Venue Direction

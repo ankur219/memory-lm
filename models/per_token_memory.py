@@ -52,6 +52,7 @@ class CompressedPerTokenAttention(nn.Module):
         cos: torch.Tensor,
         sin: torch.Tensor,
         past_kv: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        memory_override: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         need_weights: bool = False,
     ):
         batch, seq_len, _ = x.shape
@@ -69,6 +70,17 @@ class CompressedPerTokenAttention(nn.Module):
         # each head has fewer rotary dimensions to represent relative position.
         q = apply_rope(q, cos, sin)
         k = apply_rope(k, cos, sin)
+
+        if memory_override is not None:
+            if past_kv is not None:
+                raise ValueError("memory_override is only supported without past_kv")
+            override_k, override_v = memory_override
+            if override_k.shape != k.shape or override_v.shape != v.shape:
+                raise ValueError(
+                    "memory_override tensors must match projected per-token K/V shapes"
+                )
+            k = override_k
+            v = override_v
 
         if past_kv is not None:
             past_k, past_v = past_kv
@@ -133,11 +145,21 @@ class PerTokenMemoryTransformer(nn.Module):
         if isinstance(module, (nn.Linear, nn.Embedding)):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None):
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        targets: Optional[torch.Tensor] = None,
+        memory_overrides: Optional[list[Tuple[torch.Tensor, torch.Tensor]]] = None,
+    ):
+        if memory_overrides is not None and len(memory_overrides) != len(self.layers):
+            raise ValueError("memory_overrides must provide one (key, value) pair per layer")
         x = self.embed_tokens(input_ids)
         caches = []
-        for layer in self.layers:
-            x, cache = layer(x, self.rope_cos, self.rope_sin)
+        for layer_idx, layer in enumerate(self.layers):
+            attn_kwargs = {}
+            if memory_overrides is not None:
+                attn_kwargs["memory_override"] = memory_overrides[layer_idx]
+            x, cache = layer(x, self.rope_cos, self.rope_sin, **attn_kwargs)
             caches.append(cache)
         logits = self.lm_head(self.norm(x))
         if self.param_padding is not None:

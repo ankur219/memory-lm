@@ -759,6 +759,90 @@ to naive recurrent at this shape, including extra learned read/write slot
 parameters. The seed-0 read entropy is `6.238`, close to `ln(512)`, so even that
 outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
+## Long-Context Synthetic Partial Results
+
+Status: partial run completed. The longer-context command OOMed during the RMT
+portion while another 35M real-data run was using the GPU, so these tables only
+record rows that were actually written to CSV.
+
+These runs test whether the short-context synthetic pattern persists beyond the
+original 8-64 length/gap range.
+
+Command:
+
+```bash
+nohup bash -c '
+python3 experiments/run_copy_sweep.py \
+  --lengths 128 256 512 \
+  --models baseline per_token recurrent rmt \
+  --recurrent-shapes 256x128 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 64 \
+  --csv-path logs/copy_long.csv
+
+python3 experiments/run_needle_sweep.py \
+  --gaps 128 256 512 1024 \
+  --models baseline per_token recurrent rmt \
+  --recurrent-shapes 256x128 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 64 \
+  --answer-loss-weight 10 \
+  --csv-path logs/needle_long.csv
+' > long_synthetic.out 2>&1 &
+```
+
+### Long Copy
+
+| Copy Length | Baseline | Per-token | Recurrent | RMT-style |
+|---:|---:|---:|---:|---:|
+| 128 | 1.000 | 1.000 | 0.023 | missing |
+| 256 | missing | missing | missing | missing |
+| 512 | missing | missing | missing | missing |
+
+Diagnostics for completed copy-128 rows:
+
+| Model | Params | Mem Floats | Peak VRAM | Train Time | Copy Accuracy |
+|---|---:|---:|---:|---:|---:|
+| Baseline | 534,400 | 132,608 | 652 MB | 201 sec | 1.000 |
+| Per-token | 468,864 | 66,304 | 619 MB | 182 sec | 1.000 |
+| Recurrent | 471,936 | 32,768 | 5,861 MB | 1,788 sec | 0.023 |
+
+Interpretation: at copy length 128, baseline and per-token still solve dense
+exact recall, while the custom recurrent model remains near chance. This extends
+the copy-collapse pattern beyond the earlier length-64 result. RMT copy-128 is
+not available yet because the long run failed before writing that row.
+
+### Long Needle
+
+| Gap Length | Baseline | Per-token | Recurrent | RMT-style |
+|---:|---:|---:|---:|---:|
+| 128 | 1.000 | 1.000 | 0.015 | 0.807 |
+| 256 | 1.000 | 1.000 | 0.014 | missing |
+| 512 | missing | missing | missing | missing |
+| 1024 | missing | missing | missing | missing |
+
+Diagnostics for completed needle rows:
+
+| Gap Length | Model | Params | Mem Floats | Peak VRAM | Train Time | Accuracy |
+|---:|---|---:|---:|---:|---:|---:|
+| 128 | Baseline | 542,592 | 72,704 | 343 MB | 121 sec | 1.000 |
+| 128 | Per-token | 477,056 | 36,352 | 324 MB | 99 sec | 1.000 |
+| 128 | Recurrent | 480,128 | 32,768 | 3,275 MB | 1,012 sec | 0.015 |
+| 128 | RMT-style | 509,824 | 32,768 | 7,470 MB | 2,168 sec | 0.807 |
+| 256 | Baseline | 542,592 | 138,240 | 693 MB | 207 sec | 1.000 |
+| 256 | Per-token | 477,056 | 69,120 | 659 MB | 192 sec | 1.000 |
+| 256 | Recurrent | 480,128 | 32,768 | 5,901 MB | 1,815 sec | 0.014 |
+
+Interpretation: the available longer-gap needle results strengthen the
+task-dependent story. Baseline and per-token solve gap 128 and 256, custom
+recurrent remains near chance, and RMT-style memory is strong at gap 128 but is
+much slower and more memory-heavy. RMT gap 256+ and all gap 512/1024 rows remain
+missing.
+
 ## RMT-Style Published Baseline Probe
 
 Status: corrected learned-initial-memory comparison completed with three seeds

@@ -18,19 +18,20 @@ The first milestone is intentionally modest. It proves that three model families
 This is not large-scale pretraining yet.
 
 See `RESULTS.md` for the current TinyStories, WikiText, and synthetic memory
-checkpoint.
+checkpoint. Paper drafting artifacts live under `paper/`.
 
 ## Current TODOs
 
 ### Active 1-6 Plan
 
 1. **Paper outline.**
-   Start the draft around the central question: under a fixed persistent-memory
-   budget, should capacity be allocated across many token-specific states or
-   fewer compressed recurrent states? See `paper/OUTLINE.md`.
+   First draft started around the central question: under a fixed
+   persistent-memory budget, should capacity be allocated across many
+   token-specific states or fewer compressed recurrent states? See
+   `paper/DRAFT.md` and `paper/OUTLINE.md`.
 2. **Core figures and tables.**
-   Prepare the real-data loss table, synthetic recall curves, throughput table,
-   memory-budget allocation diagram, and memory-budget curve. See
+   Initial real-data, RMT-vs-per-token, and memory-layout figures are generated
+   under `paper/figures/`. The memory-budget curve is still planned. See
    `paper/FIGURES.md`.
 3. **Related work.**
    Position against Transformer-XL, Compressive Transformer, RMT, ARMT,
@@ -56,6 +57,12 @@ checkpoint.
   later evidence reopens it.
 - RMT synthetic comparison: complete enough for the current paper story; see
   `RESULTS.md`.
+
+Regenerate current paper figures with:
+
+```bash
+python3 paper/make_figures.py
+```
 
 ### Venue Direction
 

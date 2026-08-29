@@ -2,6 +2,8 @@
 
 ## Figure 1: Memory Allocation Diagram
 
+Status: generated as `paper/figures/memory_layout.svg`.
+
 Purpose: make the core comparison visible before the results.
 
 Panels:
@@ -15,6 +17,8 @@ Message: equal memory-float budgets can produce very different allocation
 shapes.
 
 ## Figure 2: Real-Data LM Table
+
+Status: generated as `paper/figures/real_lm_loss.svg`.
 
 Use the 35M TinyStories and WikiText-103 results from `RESULTS.md`.
 
@@ -45,6 +49,8 @@ Main message: per-token is stable for dense exact recall; RMT-style is strong
 for sparse long-gap needle versus custom recurrent.
 
 ## Figure 4: RMT vs Per-Token Direct Comparison
+
+Status: generated as `paper/figures/rmt_vs_per_token.svg`.
 
 Use the three-seed direct comparison table.
 
@@ -77,3 +83,10 @@ Candidate y-axes:
 Main message: turn the paper from a single-budget comparison into a scaling
 story.
 
+## Regeneration
+
+Run:
+
+```bash
+python3 paper/make_figures.py
+```

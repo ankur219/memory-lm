@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="330" viewBox="0 0 920 330">
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #172026; }
+    .title { font-size: 22px; font-weight: 700; }
+    .label { font-size: 13px; }
+    .small { font-size: 11px; fill: #46535c; }
+    .axis { stroke: #8a979f; stroke-width: 1; }
+    .grid { stroke: #d9e0e4; stroke-width: 1; }
+    .pt { fill: #2878b5; }
+    .rmt { fill: #c65d35; }
+    .rec { fill: #6b6f76; }
+    .base { fill: #2f9c68; }
+  </style>
+<text class="title" x="40.0" y="36.0" text-anchor="start">Memory Allocation Under Similar Budgets</text>
+<text class="label" x="50.0" y="82.0" text-anchor="start">Full KV</text>
+<text class="small" x="50.0" y="104.0" text-anchor="start">many wide K/V states</text>
+<rect class="base" x="50" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="86" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="122" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="158" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="50" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="86" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="122" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="158" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="50" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="86" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="122" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="158" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="50" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="86" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="122" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="base" x="158" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<text class="small" x="50.0" y="265.0" text-anchor="start">indexed by token position</text>
+<text class="label" x="275.0" y="82.0" text-anchor="start">Per-token</text>
+<text class="small" x="275.0" y="104.0" text-anchor="start">many compressed K/V states</text>
+<rect class="pt" x="275" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="311" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="347" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="383" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="275" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="311" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="347" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="383" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="275" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="311" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="347" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="383" y="190" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="275" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="311" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="347" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="pt" x="383" y="220" width="26" height="18" rx="3" opacity="0.9" />
+<text class="small" x="275.0" y="265.0" text-anchor="start">indexed by token position</text>
+<text class="label" x="500.0" y="82.0" text-anchor="start">Custom recurrent</text>
+<text class="small" x="500.0" y="104.0" text-anchor="start">fixed summary slots</text>
+<rect class="rec" x="500" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rec" x="536" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rec" x="572" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rec" x="608" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rec" x="500" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rec" x="536" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rec" x="572" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rec" x="608" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<text class="small" x="500.0" y="265.0" text-anchor="start">compress chunks into slots</text>
+<text class="label" x="725.0" y="82.0" text-anchor="start">RMT-style</text>
+<text class="small" x="725.0" y="104.0" text-anchor="start">memory tokens across chunks</text>
+<rect class="rmt" x="725" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rmt" x="761" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rmt" x="797" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rmt" x="833" y="130" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rmt" x="725" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rmt" x="761" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rmt" x="797" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<rect class="rmt" x="833" y="160" width="26" height="18" rx="3" opacity="0.9" />
+<text class="small" x="725.0" y="265.0" text-anchor="start">read/write via memory tokens</text>
+<text class="small" x="40.0" y="306.0" text-anchor="start">Same budget can mean very different storage geometry.</text>
+</svg>

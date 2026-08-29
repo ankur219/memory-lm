@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="460" viewBox="0 0 920 460">
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #172026; }
+    .title { font-size: 22px; font-weight: 700; }
+    .label { font-size: 13px; }
+    .small { font-size: 11px; fill: #46535c; }
+    .axis { stroke: #8a979f; stroke-width: 1; }
+    .grid { stroke: #d9e0e4; stroke-width: 1; }
+    .pt { fill: #2878b5; }
+    .rmt { fill: #c65d35; }
+    .rec { fill: #6b6f76; }
+    .base { fill: #2f9c68; }
+  </style>
+<text class="title" x="40.0" y="36.0" text-anchor="start">Direct Per-Token vs RMT Synthetic Accuracy</text>
+<line class="grid" x1="90" y1="370.0" x2="850" y2="370.0" />
+<text class="small" x="80.0" y="374.0" text-anchor="end">0.0</text>
+<line class="grid" x1="90" y1="310.0" x2="850" y2="310.0" />
+<text class="small" x="80.0" y="314.0" text-anchor="end">0.2</text>
+<line class="grid" x1="90" y1="250.0" x2="850" y2="250.0" />
+<text class="small" x="80.0" y="254.0" text-anchor="end">0.4</text>
+<line class="grid" x1="90" y1="190.0" x2="850" y2="190.0" />
+<text class="small" x="80.0" y="194.0" text-anchor="end">0.6</text>
+<line class="grid" x1="90" y1="130.0" x2="850" y2="130.0" />
+<text class="small" x="80.0" y="134.0" text-anchor="end">0.8</text>
+<line class="grid" x1="90" y1="70.0" x2="850" y2="70.0" />
+<text class="small" x="80.0" y="74.0" text-anchor="end">1.0</text>
+<line class="axis" x1="90" y1="70" x2="90" y2="370" />
+<line class="axis" x1="90" y1="370" x2="850" y2="370" />
+<rect class="pt" x="116.0" y="70.0" width="34.0" height="300.0" rx="3" />
+<rect class="rmt" x="158.0" y="166.0" width="34.0" height="204.0" rx="3" />
+<line x1="175.0" y1="70.0" x2="175.0" y2="313.3" stroke="#172026" stroke-width="1.5" />
+<line x1="169.0" y1="70.0" x2="181.0" y2="70.0" stroke="#172026" stroke-width="1.5" />
+<line x1="169.0" y1="313.3" x2="181.0" y2="313.3" stroke="#172026" stroke-width="1.5" />
+<text class="small" x="154.0" y="398.0" text-anchor="middle">Copy-32</text>
+<rect class="pt" x="268.0" y="70.0" width="34.0" height="300.0" rx="3" />
+<rect class="rmt" x="310.0" y="360.7" width="34.0" height="9.3" rx="3" />
+<text class="small" x="306.0" y="398.0" text-anchor="middle">Copy-64</text>
+<rect class="pt" x="420.0" y="70.0" width="34.0" height="300.0" rx="3" />
+<rect class="rmt" x="462.0" y="159.4" width="34.0" height="210.6" rx="3" />
+<line x1="479.0" y1="91.9" x2="479.0" y2="226.9" stroke="#172026" stroke-width="1.5" />
+<line x1="473.0" y1="91.9" x2="485.0" y2="91.9" stroke="#172026" stroke-width="1.5" />
+<line x1="473.0" y1="226.9" x2="485.0" y2="226.9" stroke="#172026" stroke-width="1.5" />
+<text class="small" x="458.0" y="398.0" text-anchor="middle">Needle-32</text>
+<rect class="pt" x="572.0" y="70.0" width="34.0" height="300.0" rx="3" />
+<rect class="rmt" x="614.0" y="106.9" width="34.0" height="263.1" rx="3" />
+<line x1="631.0" y1="75.7" x2="631.0" y2="138.1" stroke="#172026" stroke-width="1.5" />
+<line x1="625.0" y1="75.7" x2="637.0" y2="75.7" stroke="#172026" stroke-width="1.5" />
+<line x1="625.0" y1="138.1" x2="637.0" y2="138.1" stroke="#172026" stroke-width="1.5" />
+<text class="small" x="610.0" y="398.0" text-anchor="middle">Needle-64</text>
+<rect class="pt" x="724.0" y="319.6" width="34.0" height="50.4" rx="3" />
+<rect class="rmt" x="766.0" y="340.6" width="34.0" height="29.4" rx="3" />
+<line x1="783.0" y1="324.7" x2="783.0" y2="356.5" stroke="#172026" stroke-width="1.5" />
+<line x1="777.0" y1="324.7" x2="789.0" y2="324.7" stroke="#172026" stroke-width="1.5" />
+<line x1="777.0" y1="356.5" x2="789.0" y2="356.5" stroke="#172026" stroke-width="1.5" />
+<text class="small" x="762.0" y="398.0" text-anchor="middle">KV-16</text>
+<rect class="pt" x="650.0" y="42.0" width="24.0" height="14.0" rx="3" />
+<text class="small" x="684.0" y="54.0" text-anchor="start">Per-token</text>
+<rect class="rmt" x="650.0" y="66.0" width="24.0" height="14.0" rx="3" />
+<text class="small" x="684.0" y="78.0" text-anchor="start">RMT-style</text>
+<text class="small" x="40.0" y="415.0" text-anchor="start">Bars show three-seed means; RMT error bars show standard deviation.</text>
+</svg>

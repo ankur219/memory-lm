@@ -68,32 +68,42 @@ def task_loss(model, input_ids: torch.Tensor, targets: torch.Tensor, memory_over
     )
 
 
-def memory_with_keep_mask(caches, keep_mask: torch.Tensor):
-    """Replace dropped token slots with each example's sequence-mean slot."""
+def memory_with_keep_mask(caches, keep_mask: torch.Tensor, drop_fill: str):
+    """Replace dropped token slots with mean or zero memory."""
 
     mask = keep_mask[:, None, :, None]
     overrides = []
     for key, value in caches:
-        mean_key = key.mean(dim=2, keepdim=True)
-        mean_value = value.mean(dim=2, keepdim=True)
-        key2 = torch.where(mask, key, mean_key.expand_as(key))
-        value2 = torch.where(mask, value, mean_value.expand_as(value))
+        if drop_fill == "mean":
+            fill_key = key.mean(dim=2, keepdim=True).expand_as(key)
+            fill_value = value.mean(dim=2, keepdim=True).expand_as(value)
+        elif drop_fill == "zero":
+            fill_key = torch.zeros_like(key)
+            fill_value = torch.zeros_like(value)
+        else:
+            raise ValueError(f"Unknown drop_fill={drop_fill!r}")
+        key2 = torch.where(mask, key, fill_key)
+        value2 = torch.where(mask, value, fill_value)
         overrides.append((key2, value2))
     return overrides
 
 
 def topk_mask(scores: torch.Tensor, keep_frac: float) -> torch.Tensor:
     batch, seq_len = scores.shape
-    k = max(1, min(seq_len, round(seq_len * keep_frac)))
+    k = max(0, min(seq_len, round(seq_len * keep_frac)))
     keep = torch.zeros_like(scores, dtype=torch.bool)
+    if k == 0:
+        return keep
     idx = torch.topk(scores, k=k, dim=1).indices
     keep.scatter_(1, idx, True)
     return keep
 
 
 def random_mask(batch: int, seq_len: int, keep_frac: float, device: torch.device, generator: torch.Generator):
-    k = max(1, min(seq_len, round(seq_len * keep_frac)))
+    k = max(0, min(seq_len, round(seq_len * keep_frac)))
     keep = torch.zeros((batch, seq_len), dtype=torch.bool, device=device)
+    if k == 0:
+        return keep
     for row in range(batch):
         idx = torch.randperm(seq_len, generator=generator, device=device)[:k]
         keep[row, idx] = True
@@ -101,16 +111,18 @@ def random_mask(batch: int, seq_len: int, keep_frac: float, device: torch.device
 
 
 def stride_mask(batch: int, seq_len: int, keep_frac: float, device: torch.device):
-    k = max(1, min(seq_len, round(seq_len * keep_frac)))
-    idx = torch.linspace(0, seq_len - 1, steps=k, device=device).round().long().unique()
     keep = torch.zeros((batch, seq_len), dtype=torch.bool, device=device)
+    k = max(0, min(seq_len, round(seq_len * keep_frac)))
+    if k == 0:
+        return keep
+    idx = torch.linspace(0, seq_len - 1, steps=k, device=device).round().long().unique()
     keep[:, idx] = True
     return keep
 
 
-def evaluate_with_mask(task: str, model, input_ids, targets, keep_mask):
+def evaluate_with_mask(task: str, model, input_ids, targets, keep_mask, drop_fill: str):
     base_out = model(input_ids)
-    overrides = memory_with_keep_mask(base_out["cache"], keep_mask)
+    overrides = memory_with_keep_mask(base_out["cache"], keep_mask, drop_fill)
     return {
         "accuracy": task_accuracy(task, model, input_ids, targets, overrides),
         "loss": task_loss(model, input_ids, targets, overrides),
@@ -161,6 +173,12 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--analyze-batches", type=int, default=4)
     parser.add_argument("--keep-fracs", nargs="+", type=float, default=[0.5, 0.25, 0.1, 0.05])
+    parser.add_argument(
+        "--drop-fill",
+        choices=["mean", "zero"],
+        default="mean",
+        help="Replacement for dropped memory slots.",
+    )
     parser.add_argument("--random-trials", type=int, default=3)
     parser.add_argument("--copy-length", type=int, default=32)
     parser.add_argument("--gap-length", type=int, default=64)
@@ -179,8 +197,8 @@ def main() -> None:
     parser.add_argument("--csv-path", default="logs/token_retention.csv")
     args = parser.parse_args()
 
-    if any(frac <= 0 or frac > 1 for frac in args.keep_fracs):
-        raise ValueError("--keep-fracs must be in (0, 1]")
+    if any(frac < 0 or frac > 1 for frac in args.keep_fracs):
+        raise ValueError("--keep-fracs must be in [0, 1]")
 
     torch.manual_seed(args.seed)
     device = requested_device(args.device)
@@ -216,9 +234,16 @@ def main() -> None:
 
         salience = token_salience(model, input_ids, targets, args.task)
         for keep_frac in args.keep_fracs:
-            kept_tokens = max(1, min(input_ids.size(1), round(input_ids.size(1) * keep_frac)))
+            kept_tokens = max(0, min(input_ids.size(1), round(input_ids.size(1) * keep_frac)))
             compressed_mem = round(full_mem * kept_tokens / input_ids.size(1))
-            oracle = evaluate_with_mask(args.task, model, input_ids, targets, topk_mask(salience, keep_frac))
+            oracle = evaluate_with_mask(
+                args.task,
+                model,
+                input_ids,
+                targets,
+                topk_mask(salience, keep_frac),
+                args.drop_fill,
+            )
             rows.append(
                 {
                     "task": args.task,
@@ -239,6 +264,7 @@ def main() -> None:
                 input_ids,
                 targets,
                 stride_mask(input_ids.size(0), input_ids.size(1), keep_frac, device),
+                args.drop_fill,
             )
             rows.append(
                 {
@@ -263,6 +289,7 @@ def main() -> None:
                         input_ids,
                         targets,
                         random_mask(input_ids.size(0), input_ids.size(1), keep_frac, device, rng),
+                        args.drop_fill,
                     )
                 )
             rows.append(

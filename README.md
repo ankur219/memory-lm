@@ -42,22 +42,27 @@ checkpoint. Paper drafting artifacts live under `paper/`.
    Initial real-data, RMT-vs-per-token, and memory-layout figures are generated
    under `paper/figures/`. The memory-budget curve is still planned. See
    `paper/FIGURES.md`.
-3. **Related work.**
+3. **Memory/throughput table.**
+   Add a lightweight table using existing `Mem Floats`, FP16 footprint, and
+   observed tokens/sec from the completed 35M runs. This supports the
+   memory-budget framing without claiming optimized autoregressive inference
+   speed.
+4. **Related work.**
    Position against Transformer-XL, Compressive Transformer, RMT, ARMT,
    TransformerFAM, Memorizing Transformers, Infini-Transformer, Key-Value Means,
    Melodi, and related recurrent-memory work. See `paper/RELATED_WORK.md`.
-4. **RMT real-data scope decision.**
+5. **RMT real-data scope decision.**
    Current plan: keep RMT as a synthetic published-baseline probe unless the
    paper needs a stronger external real-data baseline. Scaling RMT to 35M
    real-data runs is optional and compute-expensive.
-5. **Multi-seed 35M real-data checks.**
+6. **Multi-seed 35M real-data checks.**
    Seed-1 is currently running. After it finishes, update `RESULTS.md`,
    `paper/DRAFT.md`, and `paper/TABLES.md` with mean/range or mean +/- std.
-6. **Memory-budget curve.**
+7. **Memory-budget curve.**
    Build the main scaling figure over persistent-memory budgets, for example
    1x, 1/2x, 1/4x, and 1/8x of full KV memory. See
    `paper/EXPERIMENT_PLAN.md`.
-7. **Token salience analysis.**
+8. **Token salience analysis.**
    Use `experiments/run_token_salience.py` to estimate which per-token memory
    slots are actually load-bearing. Validate on copy/needle/KV first, then run
    on trained real-data per-token checkpoints.
@@ -66,14 +71,15 @@ checkpoint. Paper drafting artifacts live under `paper/`.
 
 1. Update `RESULTS.md` and paper files with the 35M seed-1 and long-context
    synthetic results.
-2. Implement and run the synthetic memory-budget curve.
-3. Decide whether to run one 35M RMT TinyStories language-modeling experiment
+2. Add the lightweight memory/throughput table from existing runs.
+3. Implement and run the synthetic memory-budget curve.
+4. Decide whether to run one 35M RMT TinyStories language-modeling experiment
    or keep RMT as a synthetic-only published-baseline probe.
-4. Add real citations and polish the related-work prose.
-5. Polish generated figures and captions.
-6. Optional: reproduce actual ARMT/KVM code for a stronger external baseline.
-7. Optional: run a 70M-100M scale point if targeting a higher-ambition venue.
-8. Deferred: real-data long-context experiments.
+5. Add real citations and polish the related-work prose.
+6. Polish generated figures and captions.
+7. Optional: reproduce actual ARMT/KVM code for a stronger external baseline.
+8. Optional: run a 70M-100M scale point if targeting a higher-ambition venue.
+9. Deferred: real-data long-context experiments.
 
 ### Parked Or Closed
 

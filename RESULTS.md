@@ -787,11 +787,11 @@ to naive recurrent at this shape, including extra learned read/write slot
 parameters. The seed-0 read entropy is `6.238`, close to `ln(512)`, so even that
 outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
-## Long-Context Synthetic Partial Results
+## Long-Context Synthetic Results
 
-Status: partial run completed. Baseline, per-token, and custom recurrent rows
-are complete through copy length 512 and needle gap 1024. RMT-style rows are
-still partial because earlier long-context RMT attempts OOMed.
+Status: completed for the planned long-context copy and needle cells.
+RMT-style rows were run separately at smaller batch sizes after earlier
+long-context RMT attempts OOMed.
 
 These runs test whether the short-context synthetic pattern persists beyond the
 original 8-64 length/gap range.
@@ -827,11 +827,11 @@ python3 experiments/run_needle_sweep.py \
 
 | Copy Length | Baseline | Per-token | Recurrent | RMT-style |
 |---:|---:|---:|---:|---:|
-| 128 | 1.000 | 1.000 | 0.023 | missing |
-| 256 | 0.996 | 0.996 | 0.019 | missing |
-| 512 | 0.998 | 1.000 | 0.016 | missing |
+| 128 | 1.000 | 1.000 | 0.023 | 0.023 |
+| 256 | 0.996 | 0.996 | 0.019 | 0.018 |
+| 512 | 0.998 | 1.000 | 0.016 | 0.018 |
 
-Diagnostics for completed non-RMT copy rows:
+Diagnostics for completed copy rows:
 
 | Copy Length | Model | Params | Mem Floats | Peak VRAM | Train Time | Copy Accuracy |
 |---:|---|---:|---:|---:|---:|---:|
@@ -844,21 +844,25 @@ Diagnostics for completed non-RMT copy rows:
 | 512 | Baseline | 534,400 | 525,824 | 6,246 MB | 661 sec | 0.998 |
 | 512 | Per-token | 468,864 | 262,912 | 6,133 MB | 609 sec | 1.000 |
 | 512 | Recurrent | 471,936 | 32,768 | 21,613 MB | 2,563 sec | 0.016 |
+| 128 | RMT-style | 501,632 | 32,768 | 6,499 MB | 1,019 sec | 0.023 |
+| 256 | RMT-style | 501,632 | 32,768 | 12,161 MB | 1,943 sec | 0.018 |
+| 512 | RMT-style | 501,632 | 32,768 | 3,118 MB | 6,127 sec | 0.018 |
 
 Interpretation: baseline and per-token still solve dense exact-recall
 accessibility through copy length 512, while the custom recurrent model remains
 near chance despite the same fixed 32,768-float recurrent budget. This extends
-the copy-collapse pattern far beyond the earlier length-64 result. RMT
-long-copy rows are still missing.
+the copy-collapse pattern far beyond the earlier length-64 result. RMT-style
+memory also remains near chance on long dense copy, matching custom recurrent
+rather than per-token memory.
 
 ### Long Needle
 
 | Gap Length | Baseline | Per-token | Recurrent | RMT-style |
 |---:|---:|---:|---:|---:|
 | 128 | 1.000 | 1.000 | 0.015 | 0.807 |
-| 256 | 1.000 | 1.000 | 0.014 | missing |
-| 512 | 1.000 | 1.000 | 0.015 | missing |
-| 1024 | 1.000 | 1.000 | 0.018 | missing |
+| 256 | 1.000 | 1.000 | 0.014 | 0.014 |
+| 512 | 1.000 | 1.000 | 0.015 | 0.195 |
+| 1024 | 1.000 | 1.000 | 0.018 | 0.014 |
 
 Diagnostics for completed needle rows:
 
@@ -877,12 +881,19 @@ Diagnostics for completed needle rows:
 | 1024 | Baseline | 542,592 | 531,456 | 6,396 MB | 670 sec | 1.000 |
 | 1024 | Per-token | 477,056 | 265,728 | 6,281 MB | 621 sec | 1.000 |
 | 1024 | Recurrent | 480,128 | 32,768 | 21,686 MB | 2,580 sec | 0.018 |
+| 256 | RMT-style | 509,824 | 32,768 | 3,310 MB | 838 sec | 0.014 |
+| 512 | RMT-style | 509,824 | 32,768 | 6,169 MB | 1,584 sec | 0.195 |
+| 1024 | RMT-style | 509,824 | 32,768 | 11,967 MB | 3,072 sec | 0.014 |
 
 Interpretation: the available longer-gap needle results strengthen the
 task-dependent story. Baseline and per-token solve gap 128 through 1024, while
 custom recurrent remains near chance under the fixed 32,768-float budget.
-RMT-style memory is strong at gap 128 but is much slower and more memory-heavy;
-RMT gap 256+ rows remain missing.
+RMT-style memory is strong at gap 128, collapses at gap 256, shows a partial
+single-run spike at gap 512, and collapses again at gap 1024. Thus RMT's
+long-gap advantage over custom recurrent is real at shorter needle settings,
+but it is not monotonic or stable across the full 128-1024 gap range. Per-token
+memory remains the only compressed-memory model here that solves every tested
+long-needle gap.
 
 ## RMT-Style Published Baseline Probe
 

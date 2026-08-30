@@ -1,7 +1,8 @@
 # Current Results
 
-This file records the current research checkpoint. These are one-seed results,
-not final paper claims.
+This file records the current research checkpoint. The main real-data tables
+are still being seed-checked; focused synthetic comparisons include multi-seed
+checks where noted.
 
 ## TinyStories Full Validation
 
@@ -53,11 +54,21 @@ python3 experiments/summarize_large_tinystories_comparison.py
 
 Result:
 
+Seed 0:
+
 | Model | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Baseline | 1.5089 | 1.5499 | 4.71 | 41.4k | 18,791 MB | 38,179,584 | 786,432 |
 | Per-token many-small | 1.5204 | 1.5802 | 4.86 | 43.1k | 16,056 MB | 35,431,680 | 262,144 |
 | Recurrent few-rich | 1.7366 | 1.7068 | 5.51 | 43.0k | 14,907 MB | 35,431,680 | 262,144 |
+
+Seed 1 completed rows:
+
+| Model | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats | Notes |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| Baseline | 1.5004 | 1.5433 | 4.68 | 23.6k | 9,628 MB | 38,179,584 | 786,432 | completed |
+| Per-token many-small | 1.5514 | 1.5812 | 4.86 | 29.4k | 10,849 MB | 35,431,680 | 262,144 | completed |
+| Recurrent fair shape `128x2048` | 1.7136 | 1.7029 | 5.49 | 15.2k | 16,892 MB | 35,450,112 | 262,144 | completed; main recurrent seed-1 row |
 
 Interpretation:
 
@@ -67,6 +78,8 @@ Interpretation:
 - Different batch sizes mean throughput should not be over-interpreted in this row.
 - Caveat: this recurrent row uses `8x32768` memory, an extreme few-giant-slots
   shape.
+- Seed 1 uses the fairer `128x2048` recurrent shape as the main recurrent row,
+  rather than rerunning the original extreme `8x32768` shape.
 
 ### 35M TinyStories Recurrent Shape Check
 
@@ -85,6 +98,7 @@ while using many more, narrower memory slots.
 |---|---:|---:|---:|---:|---:|---:|
 | `8x32768` | 1.7366 | 1.7068 | 5.51 | 35,431,680 | 262,144 | 473,992,192 |
 | `128x2048` | 1.7136 | 1.7029 | 5.49 | 35,450,112 | 262,144 | 473,992,192 |
+| `128x2048`, seed 1 | 1.7136 | 1.7029 | 5.49 | 35,450,112 | 262,144 | 473,992,192 |
 
 Interpretation: changing the 35M recurrent model from extreme few-giant-slots
 memory to a more balanced `128x2048` shape slightly improves TinyStories
@@ -151,11 +165,21 @@ python3 experiments/summarize_large_wikitext_comparison.py
 
 Result:
 
+Seed 0:
+
 | Model | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
 |---|---:|---:|---:|---:|---:|---:|
 | Baseline | 3.6202 | 37.35 | 33.6k | 14,205 MB | 38,179,584 | 786,432 |
 | Per-token many-small | 3.6831 | 39.77 | 34.1k | 16,052 MB | 35,431,680 | 262,144 |
 | Recurrent few-rich | 3.7973 | 44.58 | 34.8k | 14,890 MB | 35,431,680 | 262,144 |
+
+Seed 1 completed rows:
+
+| Model | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats | Notes |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| Baseline | 3.6439 | 3.6223 | 37.42 | 30.8k | 14,205 MB | 38,179,584 | 786,432 | completed |
+| Per-token many-small | pending | pending | pending | pending | pending | 35,431,680 | 262,144 | seed-1 run still needed |
+| Recurrent fair shape `128x2048` | 3.8147 | 3.7861 | 44.08 | 15.8k | 16,892 MB | 35,450,112 | 262,144 | completed; main recurrent seed-1 row |
 
 Interpretation:
 
@@ -167,6 +191,9 @@ Interpretation:
   memory budget.
 - Caveat: this recurrent row uses `8x32768` memory, an extreme few-giant-slots
   shape.
+- Seed 1 currently has the fairer recurrent shape and baseline completed.
+  WikiText per-token seed 1 is still pending, so the WikiText seed-1 table is
+  not yet complete.
 
 ### 35M WikiText-103 Recurrent Shape Check
 
@@ -185,6 +212,7 @@ while using many more, narrower memory slots.
 |---|---:|---:|---:|---:|---:|---:|
 | `8x32768` | 3.7435 | 3.7973 | 44.58 | 35,431,680 | 262,144 | 119,085,056 |
 | `128x2048` | 3.8147 | 3.7861 | 44.08 | 35,450,112 | 262,144 | 119,085,056 |
+| `128x2048`, seed 1 | 3.8147 | 3.7861 | 44.08 | 35,450,112 | 262,144 | 119,085,056 |
 
 Interpretation: the fairer `128x2048` recurrent shape again improves
 validation loss slightly (`3.7973 -> 3.7861`), but the improvement is small and

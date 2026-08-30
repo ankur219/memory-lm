@@ -789,9 +789,9 @@ outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
 ## Long-Context Synthetic Partial Results
 
-Status: partial run completed. The longer-context command OOMed during the RMT
-portion while another 35M real-data run was using the GPU, so these tables only
-record rows that were actually written to CSV.
+Status: partial run completed. Baseline, per-token, and custom recurrent rows
+are complete through copy length 512 and needle gap 1024. RMT-style rows are
+still partial because earlier long-context RMT attempts OOMed.
 
 These runs test whether the short-context synthetic pattern persists beyond the
 original 8-64 length/gap range.
@@ -828,21 +828,28 @@ python3 experiments/run_needle_sweep.py \
 | Copy Length | Baseline | Per-token | Recurrent | RMT-style |
 |---:|---:|---:|---:|---:|
 | 128 | 1.000 | 1.000 | 0.023 | missing |
-| 256 | missing | missing | missing | missing |
-| 512 | missing | missing | missing | missing |
+| 256 | 0.996 | 0.996 | 0.019 | missing |
+| 512 | 0.998 | 1.000 | 0.016 | missing |
 
-Diagnostics for completed copy-128 rows:
+Diagnostics for completed non-RMT copy rows:
 
-| Model | Params | Mem Floats | Peak VRAM | Train Time | Copy Accuracy |
-|---|---:|---:|---:|---:|---:|
-| Baseline | 534,400 | 132,608 | 652 MB | 201 sec | 1.000 |
-| Per-token | 468,864 | 66,304 | 619 MB | 182 sec | 1.000 |
-| Recurrent | 471,936 | 32,768 | 5,861 MB | 1,788 sec | 0.023 |
+| Copy Length | Model | Params | Mem Floats | Peak VRAM | Train Time | Copy Accuracy |
+|---:|---|---:|---:|---:|---:|---:|
+| 128 | Baseline | 534,400 | 132,608 | 652 MB | 201 sec | 1.000 |
+| 128 | Per-token | 468,864 | 66,304 | 619 MB | 182 sec | 1.000 |
+| 128 | Recurrent | 471,936 | 32,768 | 5,861 MB | 1,788 sec | 0.023 |
+| 256 | Baseline | 534,400 | 263,680 | 1,855 MB | 207 sec | 0.996 |
+| 256 | Per-token | 468,864 | 131,840 | 1,798 MB | 194 sec | 0.996 |
+| 256 | Recurrent | 471,936 | 32,768 | 11,115 MB | 1,314 sec | 0.019 |
+| 512 | Baseline | 534,400 | 525,824 | 6,246 MB | 661 sec | 0.998 |
+| 512 | Per-token | 468,864 | 262,912 | 6,133 MB | 609 sec | 1.000 |
+| 512 | Recurrent | 471,936 | 32,768 | 21,613 MB | 2,563 sec | 0.016 |
 
-Interpretation: at copy length 128, baseline and per-token still solve dense
-exact recall, while the custom recurrent model remains near chance. This extends
-the copy-collapse pattern beyond the earlier length-64 result. RMT copy-128 is
-not available yet because the long run failed before writing that row.
+Interpretation: baseline and per-token still solve dense exact-recall
+accessibility through copy length 512, while the custom recurrent model remains
+near chance despite the same fixed 32,768-float recurrent budget. This extends
+the copy-collapse pattern far beyond the earlier length-64 result. RMT
+long-copy rows are still missing.
 
 ### Long Needle
 
@@ -850,8 +857,8 @@ not available yet because the long run failed before writing that row.
 |---:|---:|---:|---:|---:|
 | 128 | 1.000 | 1.000 | 0.015 | 0.807 |
 | 256 | 1.000 | 1.000 | 0.014 | missing |
-| 512 | missing | missing | missing | missing |
-| 1024 | missing | missing | missing | missing |
+| 512 | 1.000 | 1.000 | 0.015 | missing |
+| 1024 | 1.000 | 1.000 | 0.018 | missing |
 
 Diagnostics for completed needle rows:
 
@@ -864,12 +871,18 @@ Diagnostics for completed needle rows:
 | 256 | Baseline | 542,592 | 138,240 | 693 MB | 207 sec | 1.000 |
 | 256 | Per-token | 477,056 | 69,120 | 659 MB | 192 sec | 1.000 |
 | 256 | Recurrent | 480,128 | 32,768 | 5,901 MB | 1,815 sec | 0.014 |
+| 512 | Baseline | 542,592 | 269,312 | 1,938 MB | 218 sec | 1.000 |
+| 512 | Per-token | 477,056 | 134,656 | 1,880 MB | 201 sec | 1.000 |
+| 512 | Recurrent | 480,128 | 32,768 | 11,169 MB | 1,316 sec | 0.015 |
+| 1024 | Baseline | 542,592 | 531,456 | 6,396 MB | 670 sec | 1.000 |
+| 1024 | Per-token | 477,056 | 265,728 | 6,281 MB | 621 sec | 1.000 |
+| 1024 | Recurrent | 480,128 | 32,768 | 21,686 MB | 2,580 sec | 0.018 |
 
 Interpretation: the available longer-gap needle results strengthen the
-task-dependent story. Baseline and per-token solve gap 128 and 256, custom
-recurrent remains near chance, and RMT-style memory is strong at gap 128 but is
-much slower and more memory-heavy. RMT gap 256+ and all gap 512/1024 rows remain
-missing.
+task-dependent story. Baseline and per-token solve gap 128 through 1024, while
+custom recurrent remains near chance under the fixed 32,768-float budget.
+RMT-style memory is strong at gap 128 but is much slower and more memory-heavy;
+RMT gap 256+ rows remain missing.
 
 ## RMT-Style Published Baseline Probe
 

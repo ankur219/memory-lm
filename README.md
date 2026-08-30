@@ -78,13 +78,14 @@ checkpoint. Paper drafting artifacts live under `paper/`.
 5. Add real citations and polish the related-work prose.
 6. Polish generated figures and captions.
 7. Optional: reproduce actual ARMT/KVM code for a stronger external baseline.
-8. Optional: run a 70M-100M scale point if targeting a higher-ambition venue.
+8. Optional: run the prepared 100M scale point if targeting a higher-ambition
+   venue.
 9. Deferred: real-data long-context experiments.
 
 ### Parked Or Closed
 
-- 100M-150M scale point: parked for now; 70M-100M is also optional, not part of
-  the near-term plan.
+- 100M-150M scale point: parked for now. A 100M-scale config set is prepared,
+  but still optional and compute-expensive.
 - Fast-weight or outer-product memory: deliberately not planned for now.
 - Associative recurrent branch: treated as a negative/diagnostic result unless
   later evidence reopens it.
@@ -436,6 +437,77 @@ many-slot recurrent variant:
 cd memory-lm
 nohup python3 experiments/run_large_wikitext_recurrent_shape_check.py > large_wikitext_recurrent_512x512.out 2>&1 &
 tail -f large_wikitext_recurrent_512x512.out
+```
+
+## Optional 100M Scale Point
+
+The optional 100M-scale configs follow the 35M setup but use a larger backbone:
+`hidden_size=640`, `num_layers=13`, `num_heads=8`, `context_length=128`, and
+`chunk_size=64`.
+
+The compressed-memory variants are matched exactly:
+
+```text
+per-token: 128 tokens x 13 layers x 2(K,V) x 128 dim = 425,984 floats
+recurrent: 208 memory slots x 2048 dim = 425,984 floats
+```
+
+Per-token and recurrent are also parameter-matched at 100,371,456 parameters.
+The baseline is larger, 117,378,560 parameters, because it uses full-width
+attention. Checkpoint saving is disabled in all 100M configs:
+`checkpoint_dir:` and `save_every: 0`.
+
+Inspect the setup:
+
+```bash
+cd memory-lm
+python3 experiments/count_real_tokens.py \
+  configs/scale100_tinystories_baseline.yaml \
+  configs/scale100_tinystories_per_token.yaml \
+  configs/scale100_tinystories_recurrent.yaml \
+  configs/scale100_wikitext_baseline.yaml \
+  configs/scale100_wikitext_per_token.yaml \
+  configs/scale100_wikitext_recurrent.yaml
+```
+
+Run one dataset at a time:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_scale100_tinystories_comparison.py > scale100_tinystories.out 2>&1 &
+tail -f scale100_tinystories.out
+```
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_scale100_wikitext_comparison.py > scale100_wikitext.out 2>&1 &
+tail -f scale100_wikitext.out
+```
+
+Or run a single config if VRAM/time is tight:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_scale100_wikitext_comparison.py \
+  --configs scale100_wikitext_per_token.yaml \
+  > scale100_wikitext_per_token.out 2>&1 &
+tail -f scale100_wikitext_per_token.out
+```
+
+Summarize after completion:
+
+```bash
+cd memory-lm
+python3 experiments/summarize_scale100_comparison.py
+```
+
+For a second seed, use the runner-level seed override, which writes separate
+`*_seed1.jsonl` and `*_seed1.csv` logs:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_scale100_wikitext_comparison.py --seed 1 > scale100_wikitext_seed1.out 2>&1 &
+tail -f scale100_wikitext_seed1.out
 ```
 
 ## Associative Recurrent Synthetic Probe

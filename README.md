@@ -51,10 +51,10 @@ checkpoint. Paper drafting artifacts live under `paper/`.
    Position against Transformer-XL, Compressive Transformer, RMT, ARMT,
    TransformerFAM, Memorizing Transformers, Infini-Transformer, Key-Value Means,
    Melodi, and related recurrent-memory work. See `paper/RELATED_WORK.md`.
-5. **RMT real-data scope decision.**
-   Current plan: keep RMT as a synthetic published-baseline probe unless the
-   paper needs a stronger external real-data baseline. Scaling RMT to 35M
-   real-data runs is optional and compute-expensive.
+5. **35M RMT real-data probe.**
+   Practical RMT-style TinyStories/WikiText real-data configs are prepared.
+   They are not memory-matched to per-token because an exact match would require
+   hundreds of RMT memory tokens and is likely impractical on the current 3090.
 6. **Multi-seed 35M real-data checks.**
    Seed-1 is currently running. After it finishes, update `RESULTS.md`,
    `paper/DRAFT.md`, and `paper/TABLES.md` with mean/range or mean +/- std.
@@ -73,8 +73,8 @@ checkpoint. Paper drafting artifacts live under `paper/`.
    synthetic results.
 2. Add the lightweight memory/throughput table from existing runs.
 3. Implement and run the synthetic memory-budget curve.
-4. Decide whether to run one 35M RMT TinyStories language-modeling experiment
-   or keep RMT as a synthetic-only published-baseline probe.
+4. Decide whether to run the prepared 35M RMT TinyStories/WikiText real-data
+   probes and how prominently to include them.
 5. Add real citations and polish the related-work prose.
 6. Polish generated figures and captions.
 7. Optional: reproduce actual ARMT/KVM code for a stronger external baseline.
@@ -665,6 +665,74 @@ logs/kv_rmt_baseline.csv
 Use this baseline to answer the reviewer question: whether per-token memory
 only beats this repo's custom recurrent updater, or whether it also beats an
 RMT-style memory-token recurrence under the same synthetic memory budget.
+
+## 35M RMT Real-Data Probe
+
+The practical 35M RMT real-data configs are:
+
+- `configs/large_tinystories_rmt.yaml`
+- `configs/large_wikitext_rmt.yaml`
+
+They follow the 35M backbone (`hidden_size=384`, `num_layers=8`) and use 128
+RMT memory tokens. Because RMT stores memory tokens in hidden space, this is:
+
+```text
+128 memory tokens x 384 hidden dim = 49,152 persistent memory floats
+```
+
+This is a practical real-data probe, not a memory-matched comparison against
+the 262,144-float per-token/recurrent 35M runs. A strictly memory-matched RMT
+would need about 683 hidden-size memory tokens, which would make each chunk
+attend over roughly 1,430 positions (`64 + 2 * 683`) and is likely too
+activation-heavy for a 24GB RTX 3090.
+
+Run TinyStories only:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_rmt_real_probe.py \
+  --configs large_tinystories_rmt.yaml \
+  > large_tinystories_rmt.out 2>&1 &
+tail -f large_tinystories_rmt.out
+```
+
+Run WikiText only:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_rmt_real_probe.py \
+  --configs large_wikitext_rmt.yaml \
+  > large_wikitext_rmt.out 2>&1 &
+tail -f large_wikitext_rmt.out
+```
+
+Run both sequentially:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_rmt_real_probe.py \
+  > large_rmt_real_probe.out 2>&1 &
+tail -f large_rmt_real_probe.out
+```
+
+The default is a 10k-step probe with validation capped at 100 batches. For an
+intentional full-epoch run, use:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_rmt_real_probe.py \
+  --configs large_wikitext_rmt.yaml \
+  --full-epoch \
+  > large_wikitext_rmt_full.out 2>&1 &
+tail -f large_wikitext_rmt_full.out
+```
+
+Summarize after completion:
+
+```bash
+cd memory-lm
+python3 experiments/summarize_large_rmt_real_probe.py
+```
 
 Real-data runs also save checkpoints every 5000 steps and at the end:
 

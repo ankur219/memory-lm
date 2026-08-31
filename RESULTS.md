@@ -310,13 +310,17 @@ python experiments/run_kv_sweep.py \
 
 Result:
 
-| Pairs | Baseline | Per-token | Recurrent |
-|---:|---:|---:|---:|
-| 4 | 0.316 | 0.332 | 0.329 |
-| 8 | 0.211 | 0.227 | 0.216 |
-| 16 | 0.157 | 0.155 | 0.116 |
+| Pairs | Baseline | Per-token | Recurrent | RMT-style |
+|---:|---:|---:|---:|---:|
+| 4 | 0.316 | 0.332 | 0.329 | 0.320 +/- 0.004 |
+| 8 | 0.211 | 0.227 | 0.216 | 0.203 +/- 0.046 |
+| 16 | 0.157 | 0.155 | 0.116 | 0.098 +/- 0.053 |
 
-Interpretation: arbitrary in-context key-value binding is much harder. Per-token is generally strongest among the memory-compressed variants, while recurrent lags at 16 pairs.
+Interpretation: arbitrary in-context key-value binding is much harder.
+Per-token is generally strongest among the memory-compressed variants. The
+RMT-style rows are three-seed summaries for pairs 4, 8, and 16; they do not show
+a consistent advantage over per-token or custom recurrent on this random-KV
+setting.
 
 ### Associative Recurrent Random KV
 
@@ -935,7 +939,8 @@ python3 experiments/run_rmt_synthetic_baseline.py
 ### Corrected Seed Checks
 
 Focused seed checks were run for the cells most affected by the RMT comparison:
-copy-32, needle-32, needle-64, and random KV-16. Values are answer/copy
+copy-32, needle-32, needle-64, and random KV-16. We also seed-checked RMT-style
+random KV-4 and KV-8 to fill the random-KV table. Values are answer/copy
 accuracies.
 
 | Task | Model | Seed 0 | Seed 1 | Seed 2 | Mean | Std |
@@ -946,6 +951,8 @@ accuracies.
 | Needle-32 | RMT-style | 0.938 | 0.677 | 0.491 | 0.702 | 0.225 |
 | Needle-64 | Custom recurrent | 0.015 | 0.016 | 0.013 | 0.015 | 0.002 |
 | Needle-64 | RMT-style | 0.903 | 0.966 | 0.763 | 0.877 | 0.104 |
+| Random KV-4 | RMT-style | 0.323 | 0.316 | 0.320 | 0.320 | 0.004 |
+| Random KV-8 | RMT-style | 0.217 | 0.241 | 0.151 | 0.203 | 0.046 |
 | Random KV-16 | Custom recurrent | 0.123 | 0.067 | 0.123 | 0.104 | 0.032 |
 | Random KV-16 | RMT-style | 0.067 | 0.060 | 0.067 | 0.065 | 0.004 |
 
@@ -957,8 +964,9 @@ Interpretation:
   recurrent baseline in all three seeds.
 - Needle-64 is the strongest corrected RMT result: all three RMT seeds are high,
   while all custom recurrent seeds remain near zero.
-- Random KV-16 does not favor RMT-style memory after the learned-initial-memory
-  correction.
+- Random KV does not favor RMT-style memory: RMT is close to baseline/recurrent
+  at 4 pairs, below per-token at 8 pairs, and below custom recurrent at 16
+  pairs after the learned-initial-memory correction.
 
 Clarification: the RMT needle numbers are unchanged from the pre-correction seed
 check because the fairness correction changed the custom recurrent baseline, not

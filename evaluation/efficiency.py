@@ -93,6 +93,24 @@ def recurrent_memory_budget(config: TransformerConfig, bytes_per_float: int = 2,
     return out
 
 
+def kvm_memory_budget(config: TransformerConfig, bytes_per_float: int = 2):
+    """KVM compressed state: layers x slots x 2(K,V) x state_dim."""
+
+    state_dim = config.recurrent_memory_dim or config.memory_dim
+    floats = config.num_layers * config.num_memory_tokens * 2 * state_dim
+    out = floats_to_size(floats, bytes_per_float)
+    out.update(
+        {
+            "kind": "kvm",
+            "num_memory_tokens": config.num_memory_tokens,
+            "recurrent_memory_dim": state_dim,
+            "per_layer_memory": True,
+            "config": asdict(config),
+        }
+    )
+    return out
+
+
 def matched_recurrent_tokens_for_per_token(
     config: TransformerConfig,
     sequence_length: int,
@@ -118,6 +136,15 @@ def matched_recurrent_dim_for_per_token(
     per_token_floats = sequence_length * config.num_layers * 2 * config.memory_dim
     layers = config.num_layers if per_layer_memory else 1
     denom = num_memory_tokens * layers
+    return max(1, round(per_token_floats / denom))
+
+
+def matched_kvm_tokens_for_per_token(config: TransformerConfig, sequence_length: int) -> int:
+    """Choose KVM state slots with equal float count to per-token compressed KV."""
+
+    per_token_floats = sequence_length * config.num_layers * 2 * config.memory_dim
+    state_dim = config.recurrent_memory_dim or config.memory_dim
+    denom = config.num_layers * 2 * state_dim
     return max(1, round(per_token_floats / denom))
 
 

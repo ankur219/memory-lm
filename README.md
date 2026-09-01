@@ -78,6 +78,8 @@ checkpoint. Paper drafting artifacts live under `paper/`.
 5. Add real citations and polish the related-work prose.
 6. Polish generated figures and captions.
 7. Optional: reproduce actual ARMT/KVM code for a stronger external baseline.
+   KVM-style eager support is now available as `--models kvm`; ARMT remains
+   deferred.
 8. Optional: run the prepared 100M scale point if targeting a higher-ambition
    venue.
 9. Deferred: real-data long-context experiments.
@@ -665,6 +667,37 @@ logs/kv_rmt_baseline.csv
 Use this baseline to answer the reviewer question: whether per-token memory
 only beats this repo's custom recurrent updater, or whether it also beats an
 RMT-style memory-token recurrence under the same synthetic memory budget.
+
+## KVM-Style Synthetic Baseline
+
+The `kvm` model adapts the eager Key-Value Means mixer from
+`recursal/KVM-paper` into this repo's small Transformer harness. KVM stores
+compressed key/value state per layer, so the matched synthetic 32,768-float
+shape is `128x64`:
+
+```text
+2 layers * 128 slots * 2(K,V) * 64 dims = 32,768 floats
+```
+
+Run the first probe with:
+
+```bash
+python3 experiments/run_kvm_synthetic_baseline.py
+```
+
+or a quick single-cell run:
+
+```bash
+python3 experiments/run_copy_sweep.py \
+  --lengths 32 \
+  --models kvm \
+  --recurrent-shapes 128x64 \
+  --steps 3000 \
+  --num-examples 30000 \
+  --test-examples 3000 \
+  --batch-size 128 \
+  --csv-path logs/copy32_kvm.csv
+```
 
 ## 35M RMT Real-Data Probe
 

@@ -5,6 +5,7 @@ from data.text import BYTE_VOCAB_SIZE, ByteTokenizer, TiktokenTokenizer, build_l
 from evaluation.efficiency import (
     matched_recurrent_dim_for_per_token,
     matched_recurrent_tokens_for_per_token,
+    kvm_memory_budget,
     parameter_breakdown,
     per_token_memory_budget,
     recurrent_memory_budget,
@@ -76,6 +77,9 @@ def test_memory_budget_formulas():
     recurrent = recurrent_memory_budget(cfg)
     assert per_token["floats"] == 64 * 2 * 2 * 32
     assert recurrent["floats"] == 8 * 128
+    kvm = kvm_memory_budget(cfg)
+    assert kvm["floats"] == 2 * 8 * 2 * 32
+    assert kvm["per_layer_memory"] is True
     assert matched_recurrent_tokens_for_per_token(cfg, 64) == 64
     assert matched_recurrent_dim_for_per_token(cfg, 64, num_memory_tokens=8) == 1024
 

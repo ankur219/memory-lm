@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 
 from data.synthetic import ANSWER, KeyValueRetrievalDataset, collate_batch
 from evaluation.efficiency import (
+    matched_kvm_tokens_for_per_token,
     matched_recurrent_dim_for_per_token,
     matched_recurrent_tokens_for_per_token,
     parameter_breakdown,
@@ -34,7 +35,7 @@ from evaluation.efficiency import (
 from models import TransformerConfig
 from training.trainer import build_model, memory_budget_for_model
 
-RECURRENT_LIKE = {"recurrent", "assoc_recurrent", "rmt"}
+RECURRENT_LIKE = {"recurrent", "assoc_recurrent", "kvm", "rmt"}
 
 
 def parse_recurrent_shape(shape: str) -> tuple[int, int]:
@@ -125,6 +126,14 @@ def make_config(
             base.recurrent_memory_dim = base.hidden_size
             base.num_memory_tokens = matched_recurrent_tokens_for_per_token(base, sequence_length=seq_len)
         base.recurrent_memory_dim = base.hidden_size
+    elif model_name == "kvm":
+        if recurrent_shape is not None:
+            base.num_memory_tokens = recurrent_shape[0]
+            base.recurrent_memory_dim = recurrent_shape[1]
+            base.memory_dim = recurrent_shape[1]
+        else:
+            base.recurrent_memory_dim = base.memory_dim
+            base.num_memory_tokens = matched_kvm_tokens_for_per_token(base, sequence_length=seq_len)
     return base
 
 
@@ -296,7 +305,7 @@ def main() -> None:
         nargs="+",
         type=parse_recurrent_shape,
         default=None,
-        help="Optional recurrent shapes like 256x128. Applies to recurrent, assoc_recurrent, and rmt.",
+        help="Optional recurrent shapes like 256x128. Applies to recurrent, assoc_recurrent, kvm, and rmt.",
     )
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--num-examples", type=int, default=5000)

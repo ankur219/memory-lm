@@ -25,6 +25,7 @@ from data.text import (
 )
 from evaluation.efficiency import (
     baseline_kv_memory_budget,
+    kvm_memory_budget,
     parameter_breakdown,
     per_token_memory_budget,
     recurrent_memory_budget,
@@ -34,6 +35,7 @@ from evaluation.memory_tasks import token_accuracy
 from models import (
     AssociativeRecurrentMemoryTransformer,
     DecoderOnlyTransformer,
+    KVMMemoryTransformer,
     PerTokenMemoryTransformer,
     RecurrentMemoryTransformer,
     RMTMemoryTransformer,
@@ -44,6 +46,7 @@ from models import (
 MODEL_REGISTRY = {
     "assoc_recurrent": AssociativeRecurrentMemoryTransformer,
     "baseline": DecoderOnlyTransformer,
+    "kvm": KVMMemoryTransformer,
     "per_token": PerTokenMemoryTransformer,
     "recurrent": RecurrentMemoryTransformer,
     "rmt": RMTMemoryTransformer,
@@ -72,6 +75,8 @@ def memory_budget_for_model(model_name: str, config: TransformerConfig, sequence
         return per_token_memory_budget(config, sequence_length)
     if model_name in {"recurrent", "assoc_recurrent", "rmt"}:
         return recurrent_memory_budget(config, per_layer_memory=config.per_layer_memory)
+    if model_name == "kvm":
+        return kvm_memory_budget(config)
     raise ValueError(model_name)
 
 

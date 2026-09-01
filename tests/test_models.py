@@ -3,6 +3,7 @@ import torch
 from models import (
     AssociativeRecurrentMemoryTransformer,
     DecoderOnlyTransformer,
+    KVMMemoryTransformer,
     PerTokenMemoryTransformer,
     RecurrentMemoryTransformer,
     RMTMemoryTransformer,
@@ -33,6 +34,7 @@ def test_model_output_shapes():
     targets = torch.randint(0, 64, (3, 12))
     for cls in [
         DecoderOnlyTransformer,
+        KVMMemoryTransformer,
         PerTokenMemoryTransformer,
         RecurrentMemoryTransformer,
         AssociativeRecurrentMemoryTransformer,
@@ -57,6 +59,7 @@ def assert_causal(model):
 
 def test_causal_behavior_for_all_models():
     assert_causal(DecoderOnlyTransformer(tiny_config()))
+    assert_causal(KVMMemoryTransformer(tiny_config(num_memory_tokens=3, recurrent_memory_dim=16, chunk_size=4)))
     assert_causal(PerTokenMemoryTransformer(tiny_config()))
     assert_causal(RecurrentMemoryTransformer(tiny_config()))
     assert_causal(AssociativeRecurrentMemoryTransformer(tiny_config()))
@@ -110,6 +113,20 @@ def test_rmt_memory_shape():
     assert out["logits"].shape == (2, 11, 64)
     assert out["memory"].shape == (2, 5, 32)
     assert out["diagnostics"]["memory_value_norm"] > 0
+
+
+def test_kvm_memory_shape_and_diagnostics():
+    cfg = tiny_config(num_memory_tokens=5, recurrent_memory_dim=16, chunk_size=4)
+    model = KVMMemoryTransformer(cfg)
+    out = model(torch.randint(0, 64, (2, 11)))
+    assert out["logits"].shape == (2, 11, 64)
+    assert len(out["cache"]) == cfg.num_layers
+    state_k, state_v, state_vlen = out["cache"][0]
+    assert state_k.shape[:2] == (2, 4)
+    assert 0 < state_k.shape[2] <= 5
+    assert state_v.shape == state_k.shape
+    assert state_vlen.shape == state_k.shape[:3] + (1,)
+    assert out["diagnostics"]["kvm_state_tokens"] > 0
 
 
 def test_recurrent_rich_memory_shape():

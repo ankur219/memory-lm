@@ -38,6 +38,8 @@ class TransformerConfig:
     assoc_write_norm: bool = False
     assoc_memory_norm: bool = False
     assoc_memory_clip: Optional[float] = None
+    kvm_window_chunks: int = 1
+    kvm_use_merge_gate: bool = True
     param_padding: int = 0
     chunk_size: int = 128
 

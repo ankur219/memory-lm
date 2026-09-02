@@ -178,7 +178,7 @@ Seed 1 completed rows:
 | Model | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats | Notes |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | Baseline | 3.6439 | 3.6223 | 37.42 | 30.8k | 14,205 MB | 38,179,584 | 786,432 | completed |
-| Per-token many-small | pending | pending | pending | pending | pending | 35,431,680 | 262,144 | seed-1 run still needed |
+| Per-token many-small | 3.5497 | 3.5003 | 33.13 | 7.6k | 15,477 MB | 35,431,680 | 262,144 | completed |
 | Recurrent fair shape `128x2048` | 3.8147 | 3.7861 | 44.08 | 15.8k | 16,892 MB | 35,450,112 | 262,144 | completed; main recurrent seed-1 row |
 
 Interpretation:
@@ -191,9 +191,8 @@ Interpretation:
   memory budget.
 - Caveat: this recurrent row uses `8x32768` memory, an extreme few-giant-slots
   shape.
-- Seed 1 currently has the fairer recurrent shape and baseline completed.
-  WikiText per-token seed 1 is still pending, so the WikiText seed-1 table is
-  not yet complete.
+- Seed 1 is now complete for baseline, per-token, and the fairer recurrent
+  shape.
 
 ### 35M WikiText-103 Recurrent Shape Check
 
@@ -219,6 +218,52 @@ validation loss slightly (`3.7973 -> 3.7861`), but the improvement is small and
 does not close the gap to per-token many-small memory (`3.6831`). Together with
 the TinyStories shape check, this weakens the concern that the recurrent
 underperformance is mainly caused by the original `8x32768` shape.
+
+## 100M Scale Probe
+
+Status: preliminary. The 100M baseline and per-token rows completed one full
+data pass for TinyStories and WikiText-103. The recurrent rows are partial
+probes so far because stable recurrent training required much smaller batches;
+they should not be read as full-token-count comparisons yet.
+
+Setup:
+
+- Context length: 128.
+- Compressed variants target roughly 100M parameters and 425,984 persistent
+  memory floats.
+- Baseline is an uncompressed upper bound with full KV memory and more
+  parameters.
+- TinyStories full pass: 473,992,192 train tokens.
+- WikiText-103 full pass: 119,085,056 train tokens.
+
+### 100M TinyStories
+
+| Model | Status | Steps | Train Tokens | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Baseline | complete | 57,861 | 473,992,192 | 1.4438 | 1.4446 | 4.24 | 10.5k | 15,140 MB | 117,378,560 | 2,129,920 |
+| Per-token many-small | complete | 57,861 | 473,992,192 | 1.5195 | 1.4817 | 4.40 | 12.4k | 15,477 MB | 100,371,456 | 425,984 |
+| Recurrent few-rich | partial probe | 243,000 | 124,416,000 | 2.0257 | 1.5179 | 4.56 | 2.2k | 3,844 MB | 100,371,456 | 425,984 |
+
+Interpretation: the complete TinyStories rows preserve the compressed-model
+ordering seen at 35M: per-token remains behind the larger full-KV baseline but
+is strong at the matched compressed parameter/memory budget. The recurrent row
+is only a partial low-batch probe and is not yet comparable by train-token
+count; its current validation loss is already worse than the completed
+per-token row.
+
+### 100M WikiText-103
+
+| Model | Status | Steps | Train Tokens | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Baseline | complete | 14,537 | 119,085,056 | 3.4496 | 3.4391 | 31.16 | 6.4k | 15,140 MB | 117,378,560 | 2,129,920 |
+| Per-token many-small | complete | 14,537 | 119,085,056 | 3.5497 | 3.5003 | 33.13 | 7.6k | 15,477 MB | 100,371,456 | 425,984 |
+| Recurrent few-rich | partial probe | 30,000 | 30,720,000 | 4.4065 | 4.1386 | 62.72 | 1.9k | 6,192 MB | 100,371,456 | 425,984 |
+
+Interpretation: the full WikiText-103 100M rows again show baseline best and
+per-token many-small close behind under a substantially smaller compressed
+memory budget. The recurrent row processed only 30.7M tokens versus 119.1M for
+the complete rows, so it is evidence that the current recurrent setup is
+training slowly and poorly at this scale, not a final matched-token result.
 
 ## Synthetic KV Retrieval
 

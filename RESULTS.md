@@ -1108,6 +1108,62 @@ of the many-small result: spreading memory across token-indexed states remains
 the most reliable strategy tested here for exact synthetic recall, even when the
 few-rich side uses an RMT-style memory-token mechanism.
 
+## KVM-Style Published Baseline Probe
+
+Status: seed-0 synthetic probe completed. These rows are not yet seed-checked.
+
+This compares against `kvm`, a KVM-style compressed key/value state adapted from
+the public Key-Value Means implementation. Unlike RMT, KVM keeps layerwise
+compressed K/V state. The matched synthetic shape is:
+
+```text
+2 layers x 128 slots x 2(K,V) x 64 dim = 32,768 memory floats
+```
+
+Command:
+
+```bash
+python3 experiments/run_kvm_synthetic_baseline.py
+```
+
+### Seed-0 KVM Results
+
+| Task | Setting | KVM-style Accuracy | Params | Mem Floats | Peak VRAM |
+|---|---:|---:|---:|---:|---:|
+| Copy | 32 | 1.000 | 469,920 | 32,768 | 296 MB |
+| Copy | 64 | 1.000 | 469,920 | 32,768 | 626 MB |
+| Copy | 128 | 1.000 | 469,920 | 32,768 | 1,413 MB |
+| Needle | 32 | 1.000 | 478,112 | 32,768 | 205 MB |
+| Needle | 64 | 1.000 | 478,112 | 32,768 | 354 MB |
+| Needle | 128 | 1.000 | 478,112 | 32,768 | 688 MB |
+| Random KV | 4 | 0.320 | 465,824 | 32,768 | 69 MB |
+| Random KV | 8 | 0.221 | 465,824 | 32,768 | 99 MB |
+| Random KV | 16 | 0.156 | 465,824 | 32,768 | 163 MB |
+
+Comparison to existing seed-0 rows:
+
+| Task | Setting | Per-token | Custom Recurrent | RMT-style | KVM-style |
+|---|---:|---:|---:|---:|---:|
+| Copy | 32 | 1.000 | 0.045 | 0.266 | 1.000 |
+| Copy | 64 | 1.000 | 0.031 | 0.065 | 1.000 |
+| Copy | 128 | 1.000 | 0.023 | 0.023 | 1.000 |
+| Needle | 32 | 1.000 | 0.012 | 0.938 | 1.000 |
+| Needle | 64 | 1.000 | 0.015 | 0.903 | 1.000 |
+| Needle | 128 | 1.000 | 0.015 | 0.807 | 1.000 |
+| Random KV | 4 | 0.332 | 0.322 | 0.329 | 0.320 |
+| Random KV | 8 | 0.227 | 0.222 | 0.222 | 0.221 |
+| Random KV | 16 | 0.155 | 0.123 | 0.067 | 0.156 |
+
+Interpretation: this is the strongest compressed-memory external baseline so
+far. On seed 0, KVM-style memory matches per-token on copy and needle through
+the tested settings while using the same 32,768-float synthetic memory budget,
+and it is competitive with per-token on random KV. This changes the baseline
+landscape substantially: the paper should no longer imply that all compressed
+or recurrent-style alternatives fail on synthetic exact recall. The current
+safe claim is that per-token remains the most thoroughly seed-checked exact
+recall method, while KVM-style memory is a very strong, modern compressed-KV
+baseline that needs immediate seed checks before being made load-bearing.
+
 ## Token Salience and Retention Probe
 
 Status: first-pass oracle retention probe completed for copy-32, needle-64, and
@@ -1176,7 +1232,7 @@ dense exact recall still degrades sharply under aggressive compression below
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and the strongest exact synthetic recall among the tested models. RMT-style memory tokens are robustly strong against the custom recurrent baseline on long-gap single-fact needle retrieval, but they do not beat per-token memory in direct synthetic comparisons.
+> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and the strongest seed-checked exact synthetic recall among the tested models. RMT-style memory tokens are robustly strong against the custom recurrent baseline on long-gap single-fact needle retrieval, but they do not beat per-token memory in direct synthetic comparisons. KVM-style memory is now the strongest unverified external baseline: on seed 0 it matches per-token on copy and needle and is competitive on random KV, so it must be seed-checked before final paper framing.
 
 Copy is the cleanest dense exact-recall evidence so far: per-token memory
 preserves many simultaneous token identities better than the recurrent memory
@@ -1186,15 +1242,18 @@ tokens do not solve copy length 64 under the matched synthetic budget.
 Associative memory helps short copy and slightly helps copy length 32, but it
 does not improve copy length 64 or random KV retrieval. The apparent
 write-normalized needle gap-32 improvement and the raw associative 2x needle-64
-improvement do not survive seed checks.
+improvement do not survive seed checks. KVM-style memory is the important
+exception candidate: unlike custom recurrent, associative recurrent, and
+RMT-style memory on dense copy, it solves the seed-0 copy and needle settings
+tested so far.
 
 The emerging distinction is:
 
 | Task Type | Winner / Pattern | Meaning |
 |---|---|---|
-| Dense exact copy | Per-token | Many-small memory is best for storing many token identities. |
-| Long-gap single fact | Per-token overall; RMT-style beats custom recurrent | Few-rich memory can work when the task is sparse/salient, but per-token still wins the direct comparison. |
-| Random multi-pair KV | Per-token overall; custom recurrent > RMT-style at KV-16 | RMT is not universally better; task structure matters. |
+| Dense exact copy | Per-token seed-checked; KVM-style seed-0 matches | Many-small memory is best among verified models; KVM may be a strong compressed-KV alternative. |
+| Long-gap single fact | Per-token seed-checked; RMT beats custom recurrent; KVM-style seed-0 matches | Few-rich/token-compressed mechanisms can work when the task is sparse/salient, but only per-token has been seed-checked against all current baselines. |
+| Random multi-pair KV | Per-token overall; KVM-style seed-0 competitive; custom recurrent > RMT-style at KV-16 | RMT is not universally better; memory mechanism interacts strongly with task structure. |
 
 Dense exact recall, such as copy, stresses many simultaneous token identities.
 Spreading the same memory budget across token-indexed slots remains much
@@ -1204,6 +1263,12 @@ or unstable, while RMT-style memory tokens remain strong against custom
 recurrent after the learned-initial-memory fairness correction and a focused
 three-seed check. Direct comparison still favors per-token memory.
 
+KVM-style memory now creates the main open question. Its seed-0 synthetic rows
+are strong enough that they could change the paper from "per-token beats all
+compressed alternatives" to "per-token beats naive/RMT recurrent baselines, but
+KVM-style compressed KV can match per-token on short synthetic recall." That
+claim is not available until KVM is seed-checked.
+
 The salience-retention probe adds a mechanism hint: per-token memory has some
 compressible redundancy, but the useful tokens are not interchangeable. On
 copy-32, oracle-selected top-50% token memory nearly matches full per-token
@@ -1212,8 +1277,10 @@ much worse.
 
 Next useful experiments:
 
-1. Decide whether RMT-style should be scaled to real-data runs or kept as a
+1. Seed-check the KVM-style synthetic probe, especially copy-64, copy-128,
+   needle-128, and random KV-16.
+2. Decide whether RMT-style should be scaled to real-data runs or kept as a
    synthetic published-baseline probe.
-2. Begin the paper outline around the refined result: many-small per-token
-   memory is stronger for dense exact recall, while RMT-style memory shows that
-   few-rich memory can work well for sparse salient retrieval.
+3. Begin the paper outline around the refined result: many-small per-token
+   memory is stronger than naive recurrent and RMT-style memory for dense exact
+   recall, while KVM-style is the current high-priority external-baseline check.

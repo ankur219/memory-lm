@@ -767,6 +767,67 @@ cd memory-lm
 python3 experiments/summarize_large_rmt_real_probe.py
 ```
 
+## 35M KVM Real-Data Probe
+
+The 35M KVM-style real-data configs are:
+
+- `configs/large_tinystories_kvm.yaml`
+- `configs/large_wikitext_kvm.yaml`
+
+They use the same compressed persistent-memory budget as the 35M per-token and
+recurrent runs:
+
+```text
+8 layers * 128 slots * 2(K,V) * 128 dim = 262,144 floats
+```
+
+They also use `param_padding: 373120`, which brings the real-vocab KVM parameter
+count to `35,431,680`, matching the 35M per-token/recurrent compressed runs.
+
+Run TinyStories only first:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_kvm_real_probe.py \
+  --configs large_tinystories_kvm.yaml \
+  > large_tinystories_kvm.out 2>&1 &
+tail -f large_tinystories_kvm.out
+```
+
+Run WikiText only:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_kvm_real_probe.py \
+  --configs large_wikitext_kvm.yaml \
+  > large_wikitext_kvm.out 2>&1 &
+tail -f large_wikitext_kvm.out
+```
+
+Run both sequentially:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_large_kvm_real_probe.py \
+  > large_kvm_real_probe.out 2>&1 &
+tail -f large_kvm_real_probe.out
+```
+
+If batch size 96 OOMs, rerun with:
+
+```bash
+python3 experiments/run_large_kvm_real_probe.py \
+  --configs large_tinystories_kvm.yaml \
+  --batch-size 64
+```
+
+Summarize after completion:
+
+```bash
+cd memory-lm
+python3 experiments/summarize_large_kvm_real_probe.py
+```
+
 Real-data runs also save checkpoints every 5000 steps and at the end:
 
 ```text

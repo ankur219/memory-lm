@@ -840,7 +840,8 @@ outlier should not be interpreted as sharp content-addressed lookup of one slot.
 
 Status: completed for the planned long-context copy and needle cells.
 RMT-style rows were run separately at smaller batch sizes after earlier
-long-context RMT attempts OOMed.
+long-context RMT attempts OOMed. KVM-style rows were added after the KVM
+baseline proved strong at shorter lengths.
 
 These runs test whether the short-context synthetic pattern persists beyond the
 original 8-64 length/gap range.
@@ -874,11 +875,11 @@ python3 experiments/run_needle_sweep.py \
 
 ### Long Copy
 
-| Copy Length | Baseline | Per-token | Recurrent | RMT-style |
-|---:|---:|---:|---:|---:|
-| 128 | 1.000 | 1.000 | 0.023 | 0.023 |
-| 256 | 0.996 | 0.996 | 0.019 | 0.018 |
-| 512 | 0.998 | 1.000 | 0.016 | 0.018 |
+| Copy Length | Baseline | Per-token | Recurrent | RMT-style | KVM-style |
+|---:|---:|---:|---:|---:|---:|
+| 128 | 1.000 | 1.000 | 0.023 | 0.023 | 1.000 |
+| 256 | 0.996 | 0.996 | 0.019 | 0.018 | 0.959 |
+| 512 | 0.998 | 1.000 | 0.016 | 0.018 | 0.713 |
 
 Diagnostics for completed copy rows:
 
@@ -896,22 +897,29 @@ Diagnostics for completed copy rows:
 | 128 | RMT-style | 501,632 | 32,768 | 6,499 MB | 1,019 sec | 0.023 |
 | 256 | RMT-style | 501,632 | 32,768 | 12,161 MB | 1,943 sec | 0.018 |
 | 512 | RMT-style | 501,632 | 32,768 | 3,118 MB | 6,127 sec | 0.018 |
+| 128 | KVM-style | 469,920 | 32,768 | 1,413 MB | 372 sec | 1.000 |
+| 256 | KVM-style | 469,920 | 32,768 | 1,545 MB | 603 sec | 0.959 |
+| 512 | KVM-style | 469,920 | 32,768 | 3,171 MB | 1,177 sec | 0.713 |
 
 Interpretation: baseline and per-token still solve dense exact-recall
 accessibility through copy length 512, while the custom recurrent model remains
 near chance despite the same fixed 32,768-float recurrent budget. This extends
 the copy-collapse pattern far beyond the earlier length-64 result. RMT-style
 memory also remains near chance on long dense copy, matching custom recurrent
-rather than per-token memory.
+rather than per-token memory. KVM-style memory is qualitatively different: it
+matches per-token at copy length 128 and degrades gracefully at 256 and 512
+instead of collapsing to chance. It still falls below per-token at the longest
+dense-copy lengths, so the result is not "KVM solves dense copy perfectly at all
+lengths," but it clearly escapes the recurrent/RMT collapse.
 
 ### Long Needle
 
-| Gap Length | Baseline | Per-token | Recurrent | RMT-style |
-|---:|---:|---:|---:|---:|
-| 128 | 1.000 | 1.000 | 0.015 | 0.807 |
-| 256 | 1.000 | 1.000 | 0.014 | 0.014 |
-| 512 | 1.000 | 1.000 | 0.015 | 0.195 |
-| 1024 | 1.000 | 1.000 | 0.018 | 0.014 |
+| Gap Length | Baseline | Per-token | Recurrent | RMT-style | KVM-style |
+|---:|---:|---:|---:|---:|---:|
+| 128 | 1.000 | 1.000 | 0.015 | 0.807 | 1.000 |
+| 256 | 1.000 | 1.000 | 0.014 | 0.014 | 1.000 |
+| 512 | 1.000 | 1.000 | 0.015 | 0.195 | 1.000 |
+| 1024 | 1.000 | 1.000 | 0.018 | 0.014 | 1.000 |
 
 Diagnostics for completed needle rows:
 
@@ -933,6 +941,10 @@ Diagnostics for completed needle rows:
 | 256 | RMT-style | 509,824 | 32,768 | 3,310 MB | 838 sec | 0.014 |
 | 512 | RMT-style | 509,824 | 32,768 | 6,169 MB | 1,584 sec | 0.195 |
 | 1024 | RMT-style | 509,824 | 32,768 | 11,967 MB | 3,072 sec | 0.014 |
+| 128 | KVM-style | 478,112 | 32,768 | 688 MB | 189 sec | 1.000 |
+| 256 | KVM-style | 478,112 | 32,768 | 758 MB | 281 sec | 1.000 |
+| 512 | KVM-style | 478,112 | 32,768 | 1,576 MB | 571 sec | 1.000 |
+| 1024 | KVM-style | 478,112 | 32,768 | 3,217 MB | 1,174 sec | 1.000 |
 
 Interpretation: the available longer-gap needle results strengthen the
 task-dependent story. Baseline and per-token solve gap 128 through 1024, while
@@ -941,8 +953,10 @@ RMT-style memory is strong at gap 128, collapses at gap 256, shows a partial
 single-run spike at gap 512, and collapses again at gap 1024. Thus RMT's
 long-gap advantage over custom recurrent is real at shorter needle settings,
 but it is not monotonic or stable across the full 128-1024 gap range. Per-token
-memory remains the only compressed-memory model here that solves every tested
-long-needle gap.
+and KVM-style memory are the compressed-memory models here that solve every
+tested long-needle gap. KVM-style is the strongest long-needle compressed
+baseline: it matches per-token through gap 1024 while using the fixed
+32,768-float synthetic memory budget.
 
 ## RMT-Style Published Baseline Probe
 
@@ -1176,6 +1190,12 @@ recall. The sharper claim is that naive recurrent and RMT-style memory fail on
 dense copy under this budget, while KVM-style compressed KV can match per-token
 on the checked copy/needle settings.
 
+The longer-context probe strengthens and qualifies this result: KVM remains
+perfect on needle through gap 1024, but dense copy degrades from near-perfect at
+length 256 (`0.959`) to partial recall at length 512 (`0.713`). Thus KVM is not
+identical to per-token memory, but it is much closer to per-token than to
+naive recurrent or RMT-style memory on long synthetic recall.
+
 ## Token Salience and Retention Probe
 
 Status: first-pass oracle retention probe completed for copy-32, needle-64, and
@@ -1256,13 +1276,15 @@ does not improve copy length 64 or random KV retrieval. The apparent
 write-normalized needle gap-32 improvement and the raw associative 2x needle-64
 improvement do not survive seed checks. KVM-style memory is the important
 exception: unlike custom recurrent, associative recurrent, and RMT-style memory
-on dense copy, it solves the checked copy and needle settings across seeds.
+on dense copy, it solves the checked short copy and needle settings across
+seeds, remains perfect on long needle, and degrades gracefully rather than
+collapsing on long copy.
 
 The emerging distinction is:
 
 | Task Type | Winner / Pattern | Meaning |
 |---|---|---|
-| Dense exact copy | Per-token and KVM-style | Token-indexed or KVM-style compressed KV memory stores many identities much better than naive recurrent/RMT-style memory. |
+| Dense exact copy | Per-token best; KVM-style strong | Token-indexed memory stays perfect longest; KVM-style compressed KV degrades gracefully and remains far above naive recurrent/RMT-style memory. |
 | Long-gap single fact | Per-token and KVM-style; RMT beats custom recurrent | Few-rich/token-compressed mechanisms can work when the task is sparse/salient, but the mechanism matters. |
 | Random multi-pair KV | Per-token ~= KVM-style; custom recurrent > RMT-style at KV-16 | RMT is not universally better; memory mechanism interacts strongly with task structure. |
 
@@ -1278,8 +1300,9 @@ wins.
 KVM-style memory changes the main synthetic conclusion. The paper should not be
 framed as "per-token beats all compressed alternatives." The correct framing is
 closer to: per-token beats naive recurrent and RMT-style memory on dense copy,
-but KVM-style compressed KV can match per-token on the seed-checked copy/needle
-settings while staying competitive on random KV.
+but KVM-style compressed KV can match per-token on checked short copy and
+needle, solve long needle through gap 1024, degrade gracefully on long copy, and
+stay competitive on random KV.
 
 The salience-retention probe adds a mechanism hint: per-token memory has some
 compressible redundancy, but the useful tokens are not interchangeable. On
@@ -1296,4 +1319,4 @@ Next useful experiments:
 3. Begin the paper outline around the refined result: many-small per-token
    memory is stronger than naive recurrent and RMT-style memory for dense exact
    recall, while KVM-style compressed KV is a strong modern baseline that can
-   match per-token on the checked synthetic recall settings.
+   match per-token on checked needle and short-copy settings.

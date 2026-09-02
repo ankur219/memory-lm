@@ -828,6 +828,78 @@ cd memory-lm
 python3 experiments/summarize_large_kvm_real_probe.py
 ```
 
+## Optional 7M/100M KVM and RMT Real-Data Probes
+
+Additional KVM/RMT real-data configs are available for the original 7M scale
+and the optional 100M scale point:
+
+- `configs/tinystories_kvm.yaml`
+- `configs/wikitext_kvm.yaml`
+- `configs/tinystories_rmt.yaml`
+- `configs/wikitext_rmt.yaml`
+- `configs/scale100_tinystories_kvm.yaml`
+- `configs/scale100_wikitext_kvm.yaml`
+- `configs/scale100_tinystories_rmt.yaml`
+- `configs/scale100_wikitext_rmt.yaml`
+
+The 7M KVM/RMT configs use the same 32,768-float memory budget as the original
+7M compressed runs and are parameter-padded to match the 7M per-token
+compressed model. The 100M KVM configs use the same 425,984-float compressed
+memory budget as the 100M per-token/recurrent configs. The 100M RMT configs are
+practical 10k-step probes with 128 hidden-size memory tokens, matching the
+35M RMT real-data-probe convention.
+
+Run all 7M KVM/RMT probes:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_extra_kvm_rmt_real_probes.py \
+  --scale 7m \
+  --model all \
+  > extra_7m_kvm_rmt.out 2>&1 &
+tail -f extra_7m_kvm_rmt.out
+```
+
+Run only 7M KVM:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_extra_kvm_rmt_real_probes.py \
+  --scale 7m \
+  --model kvm \
+  > extra_7m_kvm.out 2>&1 &
+tail -f extra_7m_kvm.out
+```
+
+Run all 100M KVM/RMT probes:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_extra_kvm_rmt_real_probes.py \
+  --scale 100m \
+  --model all \
+  > extra_100m_kvm_rmt.out 2>&1 &
+tail -f extra_100m_kvm_rmt.out
+```
+
+For safer 100M KVM-only runs, start with one model family:
+
+```bash
+cd memory-lm
+nohup python3 experiments/run_extra_kvm_rmt_real_probes.py \
+  --scale 100m \
+  --model kvm \
+  > extra_100m_kvm.out 2>&1 &
+tail -f extra_100m_kvm.out
+```
+
+Summarize completed optional probes:
+
+```bash
+cd memory-lm
+python3 experiments/summarize_extra_kvm_rmt_real_probes.py
+```
+
 Real-data runs also save checkpoints every 5000 steps and at the end:
 
 ```text

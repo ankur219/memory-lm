@@ -31,6 +31,26 @@ Interpretation:
 - Recurrent few-rich is faster and uses much less peak VRAM than per-token, but has worse loss.
 - Cross-attention recurrent did not improve over the simpler mean-GRU update in this run.
 
+### 7M External Real-Data Rows
+
+KVM-style and RMT-style real-data rows were added after the original 7M
+TinyStories/WikiText tables. They use the same 32,768-float compressed-memory
+budget as the 7M per-token/recurrent compressed runs and are parameter-matched
+to the 7M per-token compressed model.
+
+| Dataset | Model | Train Loss | Val Loss | Perplexity | Tokens/sec | Peak VRAM | Params | Mem Floats |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| TinyStories | KVM-style | 2.0111 | 2.0986 | 8.15 | 91.9k | 12,222 MB | 6,942,976 | 32,768 |
+| TinyStories | RMT-style | 2.1169 | 2.0898 | 8.08 | 40.3k | 11,043 MB | 6,942,976 | 32,768 |
+| WikiText-103 | KVM-style | 4.5439 | 4.4097 | 82.25 | 97.2k | 12,222 MB | 6,942,976 | 32,768 |
+| WikiText-103 | RMT-style | 4.4936 | 4.3717 | 79.18 | 38.6k | 11,043 MB | 6,942,976 | 32,768 |
+
+Interpretation: at 7M scale, KVM-style and RMT-style compressed memory are
+close to the original per-token many-small rows but do not clearly beat them on
+real-language-modeling loss. RMT-style is the stronger of the two external
+baselines on these 7M real-data runs, especially on WikiText-103, while both
+remain far better than the original naive recurrent TinyStories row.
+
 ## Larger TinyStories Full Validation
 
 Setup:
@@ -68,6 +88,8 @@ Seed 1 completed rows:
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | Baseline | 1.5004 | 1.5433 | 4.68 | 23.6k | 9,628 MB | 38,179,584 | 786,432 | completed |
 | Per-token many-small | 1.5514 | 1.5812 | 4.86 | 29.4k | 10,849 MB | 35,431,680 | 262,144 | completed |
+| KVM-style | 1.5691 | 1.5789 | 4.85 | 31.1k | 15,937 MB | 35,431,680 | 262,144 | completed |
+| RMT-style | 1.7500 | 1.8784 | 6.54 | 10.0k | 21,344 MB | 35,083,008 | 49,152 | completed |
 | Recurrent fair shape `128x2048` | 1.7136 | 1.7029 | 5.49 | 15.2k | 16,892 MB | 35,450,112 | 262,144 | completed; main recurrent seed-1 row |
 
 Interpretation:
@@ -80,6 +102,12 @@ Interpretation:
   shape.
 - Seed 1 uses the fairer `128x2048` recurrent shape as the main recurrent row,
   rather than rerunning the original extreme `8x32768` shape.
+- KVM-style compressed KV transfers cleanly to real TinyStories: it matches the
+  per-token many-small validation loss while using the same parameter count and
+  persistent-memory budget.
+- RMT-style memory is much worse than per-token/KVM on TinyStories real-LM loss
+  in this run and uses a smaller persistent-memory budget (`49,152` floats)
+  because RMT stores memory tokens in hidden space.
 
 ### 35M TinyStories Recurrent Shape Check
 
@@ -179,6 +207,8 @@ Seed 1 completed rows:
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | Baseline | 3.6439 | 3.6223 | 37.42 | 30.8k | 14,205 MB | 38,179,584 | 786,432 | completed |
 | Per-token many-small | 3.5497 | 3.5003 | 33.13 | 7.6k | 15,477 MB | 35,431,680 | 262,144 | completed |
+| KVM-style | 3.7681 | 3.6820 | 39.73 | 33.2k | 15,937 MB | 35,431,680 | 262,144 | completed |
+| RMT-style | 3.7563 | 3.8328 | 46.19 | 10.4k | 21,344 MB | 35,083,008 | 49,152 | completed |
 | Recurrent fair shape `128x2048` | 3.8147 | 3.7861 | 44.08 | 15.8k | 16,892 MB | 35,450,112 | 262,144 | completed; main recurrent seed-1 row |
 
 Interpretation:
@@ -193,6 +223,11 @@ Interpretation:
   shape.
 - Seed 1 is now complete for baseline, per-token, and the fairer recurrent
   shape.
+- KVM-style compressed KV now has a real-data WikiText result and essentially
+  matches the seed-0 per-token many-small validation loss (`3.6820` vs.
+  `3.6831`) at the same parameter count and persistent-memory budget.
+- RMT-style memory is worse than per-token/KVM and the fairer recurrent shape
+  on WikiText-103 real-LM loss in this run.
 
 ### 35M WikiText-103 Recurrent Shape Check
 
@@ -1264,7 +1299,7 @@ dense exact recall still degrades sharply under aggressive compression below
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives better language-modeling loss and strong seed-checked exact synthetic recall. RMT-style memory tokens are robustly strong against the custom recurrent baseline on long-gap single-fact needle retrieval, but they do not beat per-token memory in direct synthetic comparisons. KVM-style compressed KV is the strongest external baseline: it matches per-token on the seed-checked copy/needle settings and is competitive on random KV-16.
+> Under the tested budget and implementation, many-small per-token memory gives strong language-modeling loss and seed-checked exact synthetic recall. KVM-style compressed KV is now the strongest external baseline: it matches per-token on the seed-checked copy/needle settings, remains competitive on random KV-16, and matches per-token on the 35M TinyStories/WikiText real-data runs. RMT-style memory tokens are robustly strong against the custom recurrent baseline on long-gap single-fact needle retrieval, but they do not beat per-token or KVM-style memory in direct synthetic comparisons or in the completed 35M real-data rows.
 
 Copy is the cleanest dense exact-recall evidence so far: per-token memory
 preserves many simultaneous token identities better than the recurrent memory
@@ -1297,12 +1332,13 @@ recurrent after the learned-initial-memory fairness correction and a focused
 three-seed check. In the direct RMT-vs-per-token comparison, per-token still
 wins.
 
-KVM-style memory changes the main synthetic conclusion. The paper should not be
-framed as "per-token beats all compressed alternatives." The correct framing is
-closer to: per-token beats naive recurrent and RMT-style memory on dense copy,
-but KVM-style compressed KV can match per-token on checked short copy and
-needle, solve long needle through gap 1024, degrade gracefully on long copy, and
-stay competitive on random KV.
+KVM-style memory changes the main conclusion. The paper should not be framed as
+"per-token beats all compressed alternatives." The correct framing is closer
+to: per-token beats naive recurrent and RMT-style memory on dense copy, but
+KVM-style compressed KV can match per-token on checked short copy and needle,
+solve long needle through gap 1024, degrade gracefully on long copy, stay
+competitive on random KV, and match per-token on the completed 35M real-data
+TinyStories and WikiText rows.
 
 The salience-retention probe adds a mechanism hint: per-token memory has some
 compressible redundancy, but the useful tokens are not interchangeable. On

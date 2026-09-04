@@ -1231,6 +1231,28 @@ length 256 (`0.959`) to partial recall at length 512 (`0.713`). Thus KVM is not
 identical to per-token memory, but it is much closer to per-token than to
 naive recurrent or RMT-style memory on long synthetic recall.
 
+### KVM Slot-Usage Diagnostics
+
+KVM slot diagnostics measure whether compressed writes spread across the fixed
+state or collapse onto a few slots. The diagnostic aggregates final `state_vlen`
+loads after training KVM with the same matched synthetic shape:
+
+```text
+2 layers x 128 slots x 2(K,V) x 64 dim = 32,768 memory floats
+```
+
+| Task | Accuracy | Layer 0 Active / Effective | Layer 1 Active / Effective | Top1 Load | Top5 Load | Interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| Copy-128 | 1.000 | 128 / 125.0 | 128 / 121.8 | 0.012 / 0.021 | 0.058 / 0.081 | Solves task while using nearly all slots. |
+| Needle-128 | 1.000 | 96 / 96.0 | 96 / 96.0 | 0.010 / 0.010 | 0.052 / 0.052 | Solves task with broad, near-uniform slot use. |
+| KV-64 | 0.009 | 96 / 96.0 | 96 / 96.0 | 0.010 / 0.010 | 0.052 / 0.052 | Fails hard KV, but not because of slot collapse. |
+
+Interpretation: KVM does not appear to win by routing everything into one or a
+few privileged slots. On copy-128 and needle-128, it solves the task while
+using compressed slots broadly. On KV-64, it still uses slots broadly but fails
+exact retrieval, suggesting the bottleneck is preserving/recovering many random
+bindings in the compressed representation rather than slot underuse.
+
 ## Token Salience and Retention Probe
 
 Status: first-pass oracle retention probe completed for copy-32, needle-64, and

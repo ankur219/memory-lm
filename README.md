@@ -685,6 +685,20 @@ Run the first probe with:
 python3 experiments/run_kvm_synthetic_baseline.py
 ```
 
+Inspect KVM compressed-slot usage after training:
+
+```bash
+python3 experiments/run_kvm_slot_diagnostics.py \
+  --tasks copy:128 needle:128 kv:16 \
+  --batch-size 128 \
+  --csv-path logs/kvm_slot_diagnostics.csv
+```
+
+The diagnostics CSV reports per-layer/per-head slot-load entropy, effective
+slot count, active slots, and top-slot concentration from the final KVM state.
+Use this to distinguish broad slot usage from collapse onto a few compressed
+slots.
+
 or a quick single-cell run:
 
 ```bash

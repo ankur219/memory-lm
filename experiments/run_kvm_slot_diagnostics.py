@@ -130,7 +130,7 @@ def build_task(spec: TaskSpec, args: argparse.Namespace):
         )
         cfg = make_kv_config("kvm", spec.setting, train_val.vocab.size, recurrent_shape=KVM_SHAPE)
         loss_fn = lambda logits, input_ids, targets: weighted_next_token_loss(
-            logits, input_ids, targets, args.answer_loss_weight
+            logits, input_ids, targets, args.kv_answer_loss_weight
         )
         acc_fn = kv_accuracy
         steps = args.kv_steps
@@ -290,10 +290,12 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--diagnostic-batches", type=int, default=8)
     parser.add_argument("--vocab-tokens", type=int, default=64)
+    parser.add_argument("--prefix-length", type=int, default=8)
     parser.add_argument("--num-values", type=int, default=100)
     parser.add_argument("--num-keys", type=int, default=16)
     parser.add_argument("--value-mode", choices=["random", "identity", "shifted"], default="random")
     parser.add_argument("--answer-loss-weight", type=float, default=10.0)
+    parser.add_argument("--kv-answer-loss-weight", type=float, default=20.0)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--grad-clip", type=float, default=1.0)

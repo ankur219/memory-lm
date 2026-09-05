@@ -256,10 +256,10 @@ underperformance is mainly caused by the original `8x32768` shape.
 
 ## 100M Scale Probe
 
-Status: preliminary. The 100M baseline and per-token rows completed one full
-data pass for TinyStories and WikiText-103. The recurrent rows are partial
-probes so far because stable recurrent training required much smaller batches;
-they should not be read as full-token-count comparisons yet.
+Status: preliminary. The 100M baseline, per-token, and KVM-style rows completed
+one full data pass for TinyStories and WikiText-103. The recurrent rows are
+partial probes so far because stable recurrent training required much smaller
+batches; they should not be read as full-token-count comparisons yet.
 
 Setup:
 
@@ -277,14 +277,16 @@ Setup:
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Baseline | complete | 57,861 | 473,992,192 | 1.4438 | 1.4446 | 4.24 | 10.5k | 15,140 MB | 117,378,560 | 2,129,920 |
 | Per-token many-small | complete | 57,861 | 473,992,192 | 1.5195 | 1.4817 | 4.40 | 12.4k | 15,477 MB | 100,371,456 | 425,984 |
+| KVM-style | complete | 115,721 | 473,992,192 | 1.4911 | 1.4796 | 4.39 | 7.8k | 7,479 MB | 100,405,968 | 425,984 |
 | Recurrent few-rich | partial probe | 243,000 | 124,416,000 | 2.0257 | 1.5179 | 4.56 | 2.2k | 3,844 MB | 100,371,456 | 425,984 |
 
 Interpretation: the complete TinyStories rows preserve the compressed-model
-ordering seen at 35M: per-token remains behind the larger full-KV baseline but
-is strong at the matched compressed parameter/memory budget. The recurrent row
-is only a partial low-batch probe and is not yet comparable by train-token
-count; its current validation loss is already worse than the completed
-per-token row.
+ordering seen at 35M: per-token and KVM-style remain behind the larger full-KV
+baseline but are strong at the matched compressed parameter/memory budget. KVM
+slightly edges per-token on this seed (`1.4796` vs. `1.4817`). The recurrent
+row is only a partial low-batch probe and is not yet comparable by train-token
+count; its current validation loss is worse than the completed per-token and
+KVM-style rows.
 
 ### 100M WikiText-103
 
@@ -292,13 +294,16 @@ per-token row.
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Baseline | complete | 14,537 | 119,085,056 | 3.4496 | 3.4391 | 31.16 | 6.4k | 15,140 MB | 117,378,560 | 2,129,920 |
 | Per-token many-small | complete | 14,537 | 119,085,056 | 3.5497 | 3.5003 | 33.13 | 7.6k | 15,477 MB | 100,371,456 | 425,984 |
+| KVM-style | complete | 29,074 | 119,085,056 | 3.7875 | 3.4862 | 32.66 | 10.0k | 7,480 MB | 100,405,968 | 425,984 |
 | Recurrent few-rich | partial probe | 30,000 | 30,720,000 | 4.4065 | 4.1386 | 62.72 | 1.9k | 6,192 MB | 100,371,456 | 425,984 |
 
-Interpretation: the full WikiText-103 100M rows again show baseline best and
-per-token many-small close behind under a substantially smaller compressed
-memory budget. The recurrent row processed only 30.7M tokens versus 119.1M for
-the complete rows, so it is evidence that the current recurrent setup is
-training slowly and poorly at this scale, not a final matched-token result.
+Interpretation: the full WikiText-103 100M rows again show baseline best, with
+KVM-style and per-token many-small close behind under a substantially smaller
+compressed memory budget. KVM improves over per-token on this seed (`3.4862`
+vs. `3.5003`) while using the same persistent-memory budget. The recurrent row
+processed only 30.7M tokens versus 119.1M for the complete rows, so it is
+evidence that the current recurrent setup is training slowly and poorly at this
+scale, not a final matched-token result.
 
 ## Synthetic KV Retrieval
 
@@ -1321,7 +1326,7 @@ dense exact recall still degrades sharply under aggressive compression below
 
 The current evidence supports a cautious statement:
 
-> Under the tested budget and implementation, many-small per-token memory gives strong language-modeling loss and seed-checked exact synthetic recall. KVM-style compressed KV is now the strongest external baseline: it matches per-token on the seed-checked copy/needle settings, remains competitive on random KV-16, and matches per-token on the 35M TinyStories/WikiText real-data runs. RMT-style memory tokens are robustly strong against the custom recurrent baseline on long-gap single-fact needle retrieval, but they do not beat per-token or KVM-style memory in direct synthetic comparisons or in the completed 35M real-data rows.
+> Under the tested budget and implementation, many-small per-token memory gives strong language-modeling loss and seed-checked exact synthetic recall. KVM-style compressed KV is now the strongest external baseline: it matches per-token on the seed-checked copy/needle settings, remains competitive on random KV-16, and matches or slightly improves over per-token on the completed 35M and 100M TinyStories/WikiText real-data rows. RMT-style memory tokens are robustly strong against the custom recurrent baseline on long-gap single-fact needle retrieval, but they do not beat per-token or KVM-style memory in direct synthetic comparisons or in the completed 35M real-data rows.
 
 Copy is the cleanest dense exact-recall evidence so far: per-token memory
 preserves many simultaneous token identities better than the recurrent memory
@@ -1359,8 +1364,8 @@ KVM-style memory changes the main conclusion. The paper should not be framed as
 to: per-token beats naive recurrent and RMT-style memory on dense copy, but
 KVM-style compressed KV can match per-token on checked short copy and needle,
 solve long needle through gap 1024, degrade gracefully on long copy, stay
-competitive on random KV, and match per-token on the completed 35M real-data
-TinyStories and WikiText rows.
+competitive on random KV, and match or slightly improve over per-token on the
+completed 35M and 100M real-data TinyStories and WikiText rows.
 
 The salience-retention probe adds a mechanism hint: per-token memory has some
 compressible redundancy, but the useful tokens are not interchangeable. On
@@ -1370,11 +1375,9 @@ much worse.
 
 Next useful experiments:
 
-1. Decide whether KVM-style should be scaled to real-data runs or kept as a
-   synthetic external-baseline result.
-2. Decide whether RMT-style should be scaled to real-data runs or kept as a
+1. Decide whether RMT-style should be scaled further on real-data runs or kept as a
    synthetic published-baseline probe.
-3. Begin the paper outline around the refined result: many-small per-token
+2. Begin the paper outline around the refined result: many-small per-token
    memory is stronger than naive recurrent and RMT-style memory for dense exact
    recall, while KVM-style compressed KV is a strong modern baseline that can
-   match per-token on checked needle and short-copy settings.
+   match per-token on checked needle, short-copy, and real-data LM settings.

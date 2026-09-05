@@ -63,6 +63,7 @@ def make_config(
     model_name: str,
     copy_length: int,
     vocab_size: int,
+    per_token_memory_dim: int | None = None,
     recurrent_update_style: str = "cross_attention",
     recurrent_shape: tuple[int, int] | None = None,
     recurrent_learned_initial: bool = False,
@@ -92,7 +93,9 @@ def make_config(
         assoc_memory_clip=assoc_memory_clip,
         chunk_size=32,
     )
-    if model_name == "recurrent":
+    if model_name == "per_token" and per_token_memory_dim is not None:
+        cfg.memory_dim = per_token_memory_dim
+    elif model_name == "recurrent":
         if recurrent_shape is not None:
             cfg.recurrent_memory_dim = recurrent_shape[1]
         else:
@@ -124,7 +127,13 @@ def make_config(
     return cfg
 
 
-def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[int, int] | None = None) -> dict:
+def train_one(
+    model_name: str,
+    copy_length: int,
+    args,
+    recurrent_shape: tuple[int, int] | None = None,
+    per_token_memory_dim: int | None = None,
+) -> dict:
     seed = args.seed + copy_length * 100
     torch.manual_seed(seed)
     requested_device = args.device
@@ -161,6 +170,7 @@ def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[in
         model_name,
         copy_length,
         train_val.vocab_size,
+        per_token_memory_dim=per_token_memory_dim,
         recurrent_update_style=args.recurrent_update_style,
         recurrent_shape=recurrent_shape,
         recurrent_learned_initial=args.recurrent_learned_initial,
@@ -218,6 +228,7 @@ def train_one(model_name: str, copy_length: int, args, recurrent_shape: tuple[in
         "model": model_name,
         "recurrent_shape": shape_label,
         "recurrent_update_style": cfg.recurrent_update_style if model_name == "recurrent" else "",
+        "per_token_memory_dim": cfg.memory_dim if model_name == "per_token" else "",
         "assoc_write_norm": cfg.assoc_write_norm if model_name == "assoc_recurrent" else "",
         "assoc_memory_norm": cfg.assoc_memory_norm if model_name == "assoc_recurrent" else "",
         "assoc_memory_clip": cfg.assoc_memory_clip if model_name == "assoc_recurrent" else "",
@@ -273,6 +284,13 @@ def main() -> None:
         type=parse_recurrent_shape,
         default=None,
         help="Optional recurrent shapes like 256x128. Applies to recurrent, assoc_recurrent, kvm, and rmt.",
+    )
+    parser.add_argument(
+        "--per-token-memory-dims",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Optional per-token memory dimensions. Applies only to per_token.",
     )
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--num-examples", type=int, default=5000)
@@ -332,13 +350,27 @@ def main() -> None:
                 if model_name in RECURRENT_LIKE and args.recurrent_shapes
                 else [None]
             )
+            per_token_memory_dims = (
+                args.per_token_memory_dims
+                if model_name == "per_token" and args.per_token_memory_dims
+                else [None]
+            )
             for recurrent_shape in recurrent_shapes:
-                rows.append(train_one(model_name, copy_length, args, recurrent_shape=recurrent_shape))
-                Path(args.csv_path).parent.mkdir(parents=True, exist_ok=True)
-                with Path(args.csv_path).open("w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-                    writer.writeheader()
-                    writer.writerows(rows)
+                for per_token_memory_dim in per_token_memory_dims:
+                    rows.append(
+                        train_one(
+                            model_name,
+                            copy_length,
+                            args,
+                            recurrent_shape=recurrent_shape,
+                            per_token_memory_dim=per_token_memory_dim,
+                        )
+                    )
+                    Path(args.csv_path).parent.mkdir(parents=True, exist_ok=True)
+                    with Path(args.csv_path).open("w", newline="", encoding="utf-8") as f:
+                        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                        writer.writeheader()
+                        writer.writerows(rows)
 
     print(f"\nwrote {args.csv_path}")
 
